@@ -17,14 +17,13 @@ Command line:
     py stamp_sku.py a.pdf --x 40 --y 372 --size 11 --strip
 
 Outputs go to the Labels\\ folder next to this script:
-    <name>_sku.pdf         labels only, sorted by SKU, SKUs stamped in blue
-    <name>_picklist.pdf    totals per SKU for gathering stock (4x6in; "picklist_size": "a4" in settings.json for A4)
-    <name>_picklist.csv    same, for a spreadsheet
+    <name>_sku.pdf         labels only, sorted by SKU, SKUs stamped in blue, with a pick list page
+                           (totals per SKU, 4x6in) as the LAST page. It opens automatically.
 
 Defaults can be changed in settings.json (see settings.example.json).
 Needs: pypdf, pdfplumber, reportlab, pypdfium2  (pip install -r requirements.txt)
 """
-import argparse, csv, io, json, logging, os, re, shutil, statistics, sys, time
+import argparse, io, json, logging, os, re, shutil, statistics, sys, time
 from datetime import datetime
 from pathlib import Path
 
@@ -307,15 +306,8 @@ def picklist(orders):
     return rows, unknown
 
 
-def write_picklist(base, rows, unknown, title, size="4x6"):
-    """Pick list PDF. Default page is 4x6in so it prints on the label printer without rescaling."""
-    with open(base.with_suffix(".csv"), "w", newline="", encoding="utf-8-sig") as f:
-        wr = csv.writer(f)
-        wr.writerow(["SKU", "Total qty", "Orders"])
-        wr.writerows(rows)
-        for q, t, o in unknown:
-            wr.writerow([f"NO SKU - order {o}: {t[:60]}", q, 1])
-
+def picklist_pages(rows, unknown, title, size="4x6"):
+    """Pick list as PDF page(s) (4x6in so it prints on the label printer) -> list of pypdf pages."""
     a4 = str(size).lower() == "a4"
     W, H = (595.0, 842.0) if a4 else (288.0, 432.0)
     m = 40 if a4 else 18                       # side margin
@@ -324,7 +316,8 @@ def write_picklist(base, rows, unknown, title, size="4x6"):
     qx, ox = W - m - (80 if a4 else 46), W - m  # right edges of the Qty and Orders columns
     bottom = 40 if a4 else 26
     fn = font_name()
-    c = canvas.Canvas(str(base.with_suffix(".pdf")), pagesize=(W, H))
+    buf = io.BytesIO()
+    c = canvas.Canvas(buf, pagesize=(W, H))
     y = 0
 
     def head(page):
@@ -382,6 +375,8 @@ def write_picklist(base, rows, unknown, title, size="4x6"):
             c.drawString(m, y, safe_text(f"Order {o}: {q} x {t}")[:int((ox - m) / (small * 0.5))])
             y -= pitch
     c.save()
+    buf.seek(0)
+    return list(PdfReader(buf).pages)
 
 
 # --------------------------------------------------------------------------- main work
@@ -465,12 +460,11 @@ def process(src, a, cfg):
     out_dir = Path(a.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     out = Path(a.out) if a.out else unique_path(out_dir / f"{src.stem}_sku.pdf")
+    for pg in picklist_pages(rows, unknown, "Pick list", cfg["picklist_size"]):
+        writer.add_page(pg)                      # pick list = last page(s) of the same PDF
     with open(out, "wb") as f:
         writer.write(f)
-    pl_base = out.with_name(re.sub(r"_sku(_\d+)?$", "", out.stem) + "_picklist")
-    write_picklist(pl_base, rows, unknown, "Pick list", cfg["picklist_size"])
-    print(f"  -> {out}")
-    print(f"  -> {pl_base.with_suffix('.pdf')}  (+ .csv)")
+    print(f"  -> {out}  ({total} labels + pick list as the last page)")
     if a.preview:
         png = preview_png(out, busiest[1], out.with_suffix(".png"))
         if png:
