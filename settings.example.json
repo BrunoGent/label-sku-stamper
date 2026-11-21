@@ -1,0 +1,10 @@
+{
+  "x": 40,
+  "y": 378,
+  "size": 11,
+  "out_dir": "Labels",
+  "done_dir": "done",
+  "downloads": null,
+  "pattern": "shipping*.pdf",
+  "picklist_size": "4x6"
+}

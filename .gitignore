@@ -1,0 +1,8 @@
+# customer data - never commit
+*.pdf
+*.csv
+*.png
+Labels/
+done/
+settings.json
+__pycache__/
