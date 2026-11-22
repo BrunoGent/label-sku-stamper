@@ -50,6 +50,7 @@ DEFAULTS = {
     "sort_labels": True,
     "title_fallback": True, "title_length": 28,
     "picklist": True, "picklist_size": "4x6", "picklist_columns": ["qty", "sku", "orders"], "picklist_group_titles": True, "picklist_page_per_group": False,
+    "repeat_star": True, "repeat_double_star_from": 15,
     "layout_alarm_percent": 25, "open_after": True, "move_originals": True, "strip_typed_text": False,
     "out_dir": "Labels", "done_dir": "done", "downloads": None, "pattern": "shipping*.pdf", "watch_seconds": 2,
 }
@@ -192,9 +193,26 @@ def is_slip(text):
     return ("SHIP TO" in text and "ITEMS" in text) or bool(re.search(r"Order\s+#?\d+", text))
 
 
+REPEAT_RE = re.compile(r"REPEAT\s+CUSTOMER(?:\s*\(\s*Order\s*#?\s*(\d+)\s*\))?", re.I)
+
+
 def order_no(text):
-    m = re.search(r"Order\s+#?(\d+)", text)
+    m = re.search(r"Order\s+#?(\d+)", REPEAT_RE.sub("", text))   # not the "(Order #2)" of the repeat-customer line
     return m.group(1) if m else "?"
+
+
+def repeat_of(text):
+    """The slip says "REPEAT CUSTOMER (Order #4)": -> 4. Says repeat without a number: -> 0. Not a repeat: -> None."""
+    m = REPEAT_RE.search(text)
+    return None if not m else int(m.group(1) or 0)
+
+
+def repeat_mark(n):
+    """What to stamp after the first SKU: '' (not a repeat, or switched off), '*', or '**' from repeat_double_star_from orders."""
+    if n is None or not S["repeat_star"]:
+        return ""
+    big = S["repeat_double_star_from"]
+    return "**" if (big and n >= big) else "*"
 
 
 def body_lines(page):
@@ -297,14 +315,15 @@ def parse_pdf(src):
                 if not orders:
                     notes.append(f"page {i + 1}: packing slip with no label before it - ignored")
                     continue
-                slips.append((len(orders) - 1, order_no(t), *body_lines(pg)))
+                slips.append((len(orders) - 1, order_no(t), *body_lines(pg), repeat_of(t)))
             else:
-                orders.append({"page": i, "order": "?", "items": [], "slip": False})
+                orders.append({"page": i, "order": "?", "items": [], "slip": False, "repeat": None})
         lines_all = [l for s in slips for l in s[2]]
         colmax = max([l["x1"] for l in lines_all] + [SLIP_COLUMN_EDGE])   # floor: a batch with no wrapped title still needs a sane edge
-        for oi, num, lines, marks in slips:
+        for oi, num, lines, marks, rep_n in slips:
             o = orders[oi]
             o["order"] = num
+            o["repeat"] = rep_n
             o["slip"] = True
             o["items"] += parse_items(lines, marks, colmax)
     for o in orders:
@@ -643,6 +662,9 @@ def process(src, a, cfg):
             if gn != last_group:
                 print(f"  {DIM}--- {gn} ---{OFF}")
                 last_group = gn
+        star = repeat_mark(o["repeat"])
+        if star and text:
+            text[0] += " " + star                          # same habit as writing * by hand
         print(f"  {mark} Order {o['order']:>11}: {' | '.join(text) or '-'}")
         label = writer.add_page(reader.pages[o["page"]])   # attach first, then edit (newer pypdf requires this)
         if a.strip and "/Annots" in label:
@@ -665,7 +687,10 @@ def process(src, a, cfg):
     # ---- summary
     alarms = layout_alarms(orders)
     total = len(orders)
+    repeats = sum(1 for o in orders if repeat_mark(o["repeat"]))
     print(f"\n  {BOLD}Summary{OFF}: {total} labels, {sum(r[1] for r in rows)} items, {len(rows)} different SKUs")
+    if repeats:
+        print(f"  {repeats} repeat customer{'s' if repeats != 1 else ''} (marked with * on the label)")
     colour = GREEN if not (problems or notes or overflow or titled or FILE_ERRORS or alarms) else RED
     n_issues = len(problems) + len(notes) + len(overflow) + len(titled) + len(FILE_ERRORS) + len(alarms)
     print(f"  {colour}{BOLD}{total} labels, {n_issues} problem{'s' if n_issues != 1 else ''}{OFF}")

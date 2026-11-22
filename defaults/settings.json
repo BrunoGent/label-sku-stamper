@@ -23,6 +23,10 @@
   "picklist_group_titles": true,      // show each group's name as a title (from sort_groups.json)
   "picklist_page_per_group": false,   // true = start every group on a new page
 
+  // ---- Repeat customers (the slip says "REPEAT CUSTOMER (Order #N)")
+  "repeat_star": true,             // true = put * after the first SKU of a repeat customer's label. false = off
+  "repeat_double_star_from": 15,   // from this many orders, put ** instead. 0 = never **
+
   // ---- Safety alarm
   "layout_alarm_percent": 25,      // warn loudly if this % (or more) of orders have no SKU (Shopify may have changed the slip layout). 0 = off
 

@@ -29,7 +29,7 @@ For every order in the Shopify PDF it:
 
 1. Finds the shipping label and its packing slip (the slip is the page after the label).
 2. Reads the items on the slip and works out each SKU and quantity. A quantity above 1 is written as `3 x kg h`; a quantity of 1 is just the SKU.
-3. Stamps those lines in blue at the bottom of the label (below the address area, clear of the barcode).
+3. Stamps those lines in blue at the bottom of the label (below the address area, clear of the barcode). If the slip says **REPEAT CUSTOMER**, a `*` is added after the first SKU (`**` for very frequent customers, see [Settings](#settings)).
 4. Drops the packing slips, so the output contains labels only.
 5. Sorts the labels into the **groups** you define in `sort_groups.json` (for example all 2cm dipped candles together, then tealights, with honey and beeswax last), and by number within each group. Orders that need checking come first.
 6. Adds a **pick list** page at the end: the total quantity of each SKU in the batch, for collecting stock.
@@ -108,6 +108,8 @@ All the options live in **`settings.json`**: open it in Notepad, change a value,
 | `picklist` | true | `false` = no pick list page |
 | `picklist_size` | `4x6` | `4x6` (label printer) or `a4` |
 | `picklist_columns` | `["qty", "sku", "orders"]` | Pick list columns **left to right**; leave a name out to hide that column. Names: `"qty"`, `"sku"`, `"orders"` (SKU always shows). `["sku", "qty"]` puts the SKU first and hides Orders |
+| `repeat_star` | true | Slip says "REPEAT CUSTOMER": add `*` after the first SKU on the label. `false` = off |
+| `repeat_double_star_from` | 15 | From this many orders (the number in "Order #N" on the slip) use `**` instead. `0` = never |
 | `picklist_group_titles` | true | Show each group's name (from `sort_groups.json`) as a bold title with a line under it |
 | `picklist_page_per_group` | false | `true` = start every group on a new page |
 | `layout_alarm_percent` | 25 | Warn loudly if this percentage (or more) of the orders have no SKU: Shopify may have changed the slip layout. `0` = off |
@@ -118,6 +120,8 @@ All the options live in **`settings.json`**: open it in Notepad, change a value,
 | `downloads` | `null` | `null` = your Windows Downloads folder, or a path such as `"D:/Downloads"` |
 | `pattern` | `shipping*.pdf` | File names picked up from Downloads |
 | `watch_seconds` | 2 | Watch mode: how often to look for new downloads |
+
+**Repeat customers.** The program does not know who is a repeat customer; it reads the packing slip. Shopify prints "★ REPEAT CUSTOMER (Order #2) ★" on the slip for web and eBay orders. Etsy orders show it only if the Etsy-Shopify sync tags them and the packing slip template has the repeat-customer line (see the sync's `docs/shopify-packing-slip-repeat.txt`). Slip says repeat, label gets `*`; no repeat text, no star.
 
 A typo in a setting name is reported in the window. If the file itself is broken (for example a missing comma) the program says so with the line number and uses its built-in defaults. Command-line options (below) add to or override these for one run.
 
