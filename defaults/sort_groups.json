@@ -1,0 +1,19 @@
+{
+  // KNOWN-GOOD STARTER COPY. If sort_groups.json gets broken beyond repair, copy this file over it.
+  // Lines starting with // are comments and are ignored. See README.md ("Choosing the label order").
+  // Labels print in the order of these groups, top to bottom. A SKU goes in the FIRST group, from the top,
+  // with a matching pattern. * matches anything: "* dip 2cm" matches "4 dip 2cm".
+  "groups": [
+    // Specific groups go ABOVE general ones: "* dip 2cm" above "* dip *".
+    {"name": "Dipped 2cm",      "match": ["* dip 2cm"]},
+    {"name": "Dipped 1.5cm",    "match": ["* dip 1.5"]},
+    {"name": "Tealights",       "match": ["* TL"]},
+    {"name": "Coloured dipped", "match": ["* dip *"]},
+
+    // Everything not listed anywhere lands here (and is reported in the window).
+    {"name": "Other (not yet in a group)", "match": ["*"], "warn": true},
+
+    // Prints last. These are matched before "Other", so "Other" only holds the leftovers.
+    {"name": "Beeswax and honey (at the end)", "match": ["*BW*", "* h", "*jar"]}
+  ]
+}

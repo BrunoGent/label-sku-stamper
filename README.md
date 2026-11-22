@@ -142,6 +142,23 @@ Rules:
 - **Numbers sort as numbers**: `2`, `4`, `6`, `12`, `20` (not `12` before `2`). With one pattern the whole group runs 2s, then 4s and so on. With several patterns, each pattern's batch comes first and the numbers run within it. To mix types so that all the 2s come together whatever the letters, use one pattern that covers them, e.g. `"* V*"` (then 4 VL, 4 VN, 4 VV are together).
 - The order is not part of the program: edit and save the file, then run again. No restart needed. If the file has a typo the program says so and falls back to plain SKU order. `--no-sort` ignores it and keeps Shopify's order.
 
+## If a settings file breaks, and how to check your edits
+
+Both files are plain text, so a typo is possible: the usual one is a missing or extra comma between lines.
+
+- **What happens:** the program does not stop. It prints a red message with the line number, uses safe defaults (broken `settings.json`: built-in settings; broken `sort_groups.json`: labels sorted by plain SKU order) and repeats the problem in the summary, which then counts it as a problem. The mistake is usually on, or just above, the line number given.
+- **Check before you print:** `py stamp_sku.py --validate` checks both files and says "fine" or shows the problem.
+- **Reset:** the `defaults\` folder holds known-good copies of both files. Copy the one you need over the broken one in the main folder. (Your own version is also in the git history if you want it back.)
+
+## Testing with an old batch
+
+Use a PDF you downloaded earlier; the originals are in the `done\` folder. Nothing is changed or moved, and a new file is made each time, so it is safe to experiment (for example after editing `sort_groups.json`).
+
+```
+py stamp_sku.py "done\shipping_documents_4_x_6 (6).pdf" --check
+```
+lists every order with its SKU and group in the window and writes nothing. Drop `--check` to also make the PDF in `Labels\` (add `--no-open` to stop it opening). Or drag the old PDF onto `run.bat`. A file named on the command line, or dragged, is left where it is.
+
 ## Command line options
 
 ```

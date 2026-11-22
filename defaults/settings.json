@@ -1,0 +1,36 @@
+{
+  // Settings for the label stamper. Lines starting with // are notes and are ignored.
+  // Change a value, save, and run again. No restart needed. true = on, false = off.
+  // (The ORDER of the labels is set in the other file, sort_groups.json.)
+
+  // ---- Where the SKU text goes on each label (points from the top-left; the label is 288 x 432)
+  "x": 40,
+  "y": 378,
+  "size": 11,
+  "colour": [0, 0, 0.85],       // red, green, blue, each 0 to 1. [0, 0, 0.85] = blue, [0, 0, 0] = black
+
+  // ---- Label order
+  "sort_labels": true,          // false = keep Shopify's order and ignore sort_groups.json
+
+  // ---- Items with no SKU on the slip
+  "title_fallback": true,       // true = stamp part of the title; false = stamp ?? CHECK SLIP instead
+  "title_length": 28,           // how many characters of the title to stamp (a [bracketed option] is used in full)
+
+  // ---- Pick list (the last page of the labels PDF)
+  "picklist": true,                   // false = no pick list page
+  "picklist_size": "4x6",             // "4x6" (label printer) or "a4"
+  "picklist_group_titles": true,      // show each group's name as a title (from sort_groups.json)
+  "picklist_page_per_group": false,   // true = start every group on a new page
+
+  // ---- What happens after
+  "open_after": true,           // open the finished PDF automatically
+  "move_originals": true,       // move the original download to done\ (when picked from Downloads, or in watch mode)
+  "strip_typed_text": false,    // true = remove text that was typed by hand onto the original labels
+
+  // ---- Folders and files
+  "out_dir": "Labels",
+  "done_dir": "done",
+  "downloads": null,            // null = your Windows Downloads folder; or a path like "D:/Downloads"
+  "pattern": "shipping*.pdf",   // which downloaded files are picked up
+  "watch_seconds": 2            // watch mode: how often to look for new downloads
+}

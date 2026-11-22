@@ -52,6 +52,7 @@ DEFAULTS = {
     "open_after": True, "move_originals": True, "strip_typed_text": False,
     "out_dir": "Labels", "done_dir": "done", "downloads": None, "pattern": "shipping*.pdf", "watch_seconds": 2,
 }
+FILE_ERRORS = []     # problems found while reading settings.json / sort_groups.json (shown again in the summary)
 S = dict(DEFAULTS)     # the live settings (settings.json merged over DEFAULTS); set by load_settings()
 
 
@@ -105,6 +106,7 @@ def load_settings():
     """Merge settings.json over the defaults. Unknown names are reported (usually a typo)."""
     S.clear()
     S.update(DEFAULTS)
+    FILE_ERRORS[:] = [e for e in FILE_ERRORS if not e.startswith("settings.json")]
     f = HERE / "settings.json"
     if f.exists():
         try:
@@ -116,7 +118,8 @@ def load_settings():
                 else:
                     print(f"{YELLOW}settings.json: unknown setting '{k}' ignored (typo?){OFF}")
         except Exception as e:
-            print(f"{YELLOW}settings.json ignored (fix the file): {e}{OFF}")
+            print(f"{RED}settings.json ignored (fix the file): {e}{OFF}")
+            FILE_ERRORS.append(f"settings.json is broken ({e}) - default settings used")
     return S
 
 
@@ -345,12 +348,14 @@ def load_groups():
     A SKU belongs to the FIRST group (top to bottom) with a matching pattern; `*` is a wildcard.
     A group whose match list is just "*" is the 'everything else' group, wherever it sits in the list."""
     f = HERE / "sort_groups.json"
+    FILE_ERRORS[:] = [e for e in FILE_ERRORS if not e.startswith("sort_groups.json")]
     if not f.exists():
         return []
     try:
         data = read_json(f)
     except Exception as e:
-        print(f"{YELLOW}sort_groups.json ignored (fix the file): {e}{OFF}")
+        print(f"{RED}sort_groups.json ignored (fix the file): {e}{OFF}")
+        FILE_ERRORS.append(f"sort_groups.json is broken ({e}) - labels sorted by plain SKU order instead")
         return []
     groups = []
     for g in data.get("groups", []):
@@ -578,8 +583,8 @@ def process(src, a, cfg):
     # ---- summary
     total = len(orders)
     print(f"\n  {BOLD}Summary{OFF}: {total} labels, {sum(r[1] for r in rows)} items, {len(rows)} different SKUs")
-    colour = GREEN if not (problems or notes or overflow or titled) else RED
-    n_issues = len(problems) + len(notes) + len(overflow) + len(titled)
+    colour = GREEN if not (problems or notes or overflow or titled or FILE_ERRORS) else RED
+    n_issues = len(problems) + len(notes) + len(overflow) + len(titled) + len(FILE_ERRORS)
     print(f"  {colour}{BOLD}{total} labels, {n_issues} problem{'s' if n_issues != 1 else ''}{OFF}")
     for o in problems:
         print(f"  {RED}- order {o}: no items found on the slip - label says '{CHECK_TEXT}'{OFF}")
@@ -589,6 +594,8 @@ def process(src, a, cfg):
         print(f"  {YELLOW}- order {o}: too many SKUs to fit neatly - check the label{OFF}")
     for n in notes:
         print(f"  {YELLOW}- {n}{OFF}")
+    for e in FILE_ERRORS:
+        print(f"  {RED}- {e}. The mistake is usually on, or just above, the line number given (often a missing comma). To reset, copy the file from the defaults folder.{OFF}")
     if stray:
         print(f"  {YELLOW}- SKUs not in a named sort group (add them to sort_groups.json): {', '.join(stray)}{OFF}")
     if a.check:
@@ -701,9 +708,16 @@ def main():
     ap.add_argument("--watch", action="store_true", help="keep running and process new downloads")
     ap.add_argument("--move", action="store_true", help="move processed originals to done\\ (automatic for Downloads/watch)")
     ap.add_argument("--no-open", action="store_true", help="don't open the result")
+    ap.add_argument("--validate", action="store_true", help="check settings.json and sort_groups.json for mistakes, then stop")
     ap.add_argument("--no-picklist", action="store_true", help="leave the pick list page out")
     ap.add_argument("--downloads", help="folder to look in (default: your Downloads)")
     a = ap.parse_args()
+    if a.validate:
+        groups = load_groups()
+        if FILE_ERRORS:
+            sys.exit(f"{RED}Problem found:{OFF} " + "; ".join(FILE_ERRORS))
+        print(f"{GREEN}settings.json and sort_groups.json are fine{OFF} ({len(groups)} sort groups).")
+        return
     a.strip = a.strip or bool(cfg["strip_typed_text"])        # command-line flags add to settings.json
     a.sort = a.sort and bool(cfg["sort_labels"])
     a.no_open = a.no_open or not cfg["open_after"]
