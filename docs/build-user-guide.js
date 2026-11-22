@@ -86,7 +86,7 @@ const doc = new Document({
       step([b("Download from Shopify. "), t("Download the shipping documents for the batch (4x6 size). The file goes into your Downloads folder, with a name starting “shipping”.")]),
       step([b("Open the label-sku-stamper folder "), t("(C:\\beemine-automations\\label-sku-stamper) and double-click "), b("run.bat"), t(". A black window opens and lists every order with its SKU(s). It uses the newest shipping file in Downloads by itself. To use a different file, drag that PDF onto run.bat instead.")]),
       step([b("Read the list in the window. "), t("The next section explains the colours. A yellow line at the end listing “SKUs not in a named sort group” just means some new SKUs need adding to the label order; tell Bruno.")]),
-      step([b("The finished PDF opens by itself. "), t("Look through it. Each label should show a blue SKU at the bottom, clear of the barcode and the address. The last page is the pick list.")]),
+      step([b("The finished PDF opens by itself. "), t("Look through it. Each label should show a blue SKU at the bottom, clear of the barcode and the address. The last page is the pick list; its bold Total orders line says how many orders are in the batch.")]),
       step([b("Print the whole PDF "), t("on the label printer (4x6in). Labels come out sorted so identical orders are together, and anything that needs checking comes first. The pick list comes out last. To print only the pick list, print only the last page.")]),
       step([b("Press any key "), t("to close the black window. Your download is moved to the “done” folder, so the next run will not use it again. Nothing is deleted.")]),
 

@@ -472,8 +472,9 @@ def pick_columns():
     return cols
 
 
-def picklist_pages(rows, unknown, title, size="4x6"):
-    """Pick list as PDF page(s) (4x6in so it prints on the label printer) -> list of pypdf pages."""
+def picklist_pages(rows, unknown, title, size="4x6", total_orders=None):
+    """Pick list as PDF page(s) (4x6in so it prints on the label printer) -> list of pypdf pages.
+    total_orders: how many orders (labels) are in the batch; shown bold at the end, under the Orders column."""
     a4 = str(size).lower() == "a4"
     W, H = (595.0, 842.0) if a4 else (288.0, 432.0)
     m = 40 if a4 else 18                       # side margin
@@ -526,7 +527,7 @@ def picklist_pages(rows, unknown, title, size="4x6"):
             if cur[0] is not None:
                 c.setFillColorRGB(0, 0, 0)
                 c.setFont(font_bold(), mid + 1.5)
-                c.drawString(m, y, safe_text(cur[0] + " (continued)")[:int((ox - m) / ((mid + 1.5) * 0.55))])
+                c.drawString(sku_x, y, safe_text(cur[0] + " (continued)")[:int((ox - sku_x) / ((mid + 1.5) * 0.55))])
                 c.setLineWidth(0.7)
                 c.line(m, y - 3, ox, y - 3)
                 c.setLineWidth(1)
@@ -547,7 +548,7 @@ def picklist_pages(rows, unknown, title, size="4x6"):
                 room(2)
                 c.setFillColorRGB(0, 0, 0)
                 c.setFont(font_bold(), mid + 1.5)
-                c.drawString(m, y, safe_text(gname)[:int((ox - m) / ((mid + 1.5) * 0.55))])
+                c.drawString(sku_x, y, safe_text(gname)[:int((ox - sku_x) / ((mid + 1.5) * 0.55))])   # in the SKU column, so the Qty column reads straight down
                 c.setLineWidth(0.7)
                 c.line(m, y - 3, ox, y - 3)
                 c.setLineWidth(1)
@@ -567,13 +568,18 @@ def picklist_pages(rows, unknown, title, size="4x6"):
     y -= pitch * 0.4
     room(2)
     c.line(m, y + pitch - 4, ox, y + pitch - 4)
-    c.setFont(fn, big)
-    total_items = sum(r[1] for r in rows)
-    if "qty" in cols:
-        c.drawString(sku_x, y, "Total items")
-        c.drawRightString(left["qty"] + widths["qty"] - 4, y, str(total_items))
-    else:
-        c.drawString(sku_x, y, f"Total items: {total_items}")
+    # Total ORDERS (the number that matters), bold and a little larger: the number sits under the Orders
+    # column, the words just to its left with a small gap. (Not an items total.)
+    total = total_orders if total_orders is not None else sum(r[2] for r in rows)   # fallback only if the caller did not say
+    bold, tot = font_bold(), big + 2
+    num_right = (left["orders"] + widths["orders"] - 4) if "orders" in cols else ox
+    gap = 14 if a4 else 10
+    label_x = num_right - pdfmetrics.stringWidth(str(total), bold, tot) - gap - pdfmetrics.stringWidth("Total orders", bold, tot)
+    y -= 3                                           # a little air under the rule: this row's text is larger than the rows above
+    c.setFillColorRGB(0, 0, 0)
+    c.setFont(bold, tot)
+    c.drawString(label_x, y, "Total orders")
+    c.drawRightString(num_right, y, str(total))
     y -= pitch * 1.5
     if unknown:
         room(2)
@@ -759,7 +765,7 @@ def process(src, a, cfg):
     out_dir.mkdir(parents=True, exist_ok=True)
     out = Path(a.out) if a.out else unique_path(out_dir / f"{src.stem}_sku.pdf")
     if a.picklist:
-        for pg in picklist_pages(rows, unknown, "Pick list", cfg["picklist_size"]):
+        for pg in picklist_pages(rows, unknown, "Pick list", cfg["picklist_size"], total):
             writer.add_page(pg)                  # pick list = last page(s) of the same PDF
     with open(out, "wb") as f:
         writer.write(f)

@@ -32,7 +32,7 @@ For every order in the Shopify PDF it:
 3. Stamps those lines in blue at the bottom of the label (below the address area, clear of the barcode). If the slip says **REPEAT CUSTOMER**, a `*` is added after the first SKU (`**` for very frequent customers, see [Settings](#settings)).
 4. Drops the packing slips, so the output contains labels only.
 5. Sorts the labels into the **groups** you define in `sort_groups.json` (for example all 2cm dipped candles together, then tealights, with honey and beeswax last), and by number within each group. Orders that need checking come first.
-6. Adds a **pick list** page at the end: the total quantity of each SKU in the batch, for collecting stock.
+6. Adds a **pick list** page at the end: the total quantity of each SKU in the batch, for collecting stock. Group titles sit in the SKU column, and the last line is a bold **Total orders** (the number of orders, i.e. labels, in the batch) with its number under the Orders column.
 7. Saves one PDF in the `Labels` folder and opens it.
 
 ## Quick start (everyday use)

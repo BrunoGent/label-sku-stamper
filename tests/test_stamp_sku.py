@@ -257,3 +257,45 @@ class RepeatCustomers(unittest.TestCase):
             self.assertNotIn("*", pages[1])
             self.assertIn("**", pages[2])
             self.assertIn("2 repeat customers", run.stdout)
+
+
+class PickListLayout(unittest.TestCase):
+    """The pick list ends with a bold TOTAL ORDERS under the Orders column, and group titles sit in the SKU column."""
+
+    def setUp(self):
+        s.load_settings()
+
+    def words(self, rows, total, size="4x6"):
+        import pdfplumber
+        from pypdf import PdfWriter
+        w = PdfWriter()
+        for p in s.picklist_pages(rows, [], "Pick list", size, total):
+            w.add_page(p)
+        buf = io.BytesIO()
+        w.write(buf)
+        buf.seek(0)
+        with pdfplumber.open(buf) as pl:
+            return pl.pages[0].extract_words(extra_attrs=["fontname", "size"]), float(pl.pages[0].width)
+
+    def test_total_orders_replaces_total_items(self):
+        rows = [("2 dip 2cm", 3, 2, "Dipped 2cm"), ("6 VN", 1, 1, "Votive natural")]
+        words, _ = self.words(rows, 7)
+        text = " ".join(w["text"] for w in words)
+        self.assertIn("Total orders", text)
+        self.assertNotIn("Total items", text)
+        total = [w for w in words if w["text"] == "7"][0]
+        label = [w for w in words if w["text"] == "Total"][0]
+        self.assertIn("Bold", total["fontname"])
+        self.assertIn("Bold", label["fontname"])
+        self.assertGreater(total["size"], 9)                       # a little larger than the 9pt SKU rows
+        orders_hdr = [w for w in words if w["text"] == "Orders" and w["top"] < 80][0]
+        self.assertAlmostEqual(total["x1"], orders_hdr["x1"], delta=2)      # number sits under the Orders column
+        self.assertGreater(total["x0"] - [w for w in words if w["text"] == "orders" and w["top"] > 80][-1]["x1"], 5)   # gap after the words
+
+    def test_group_title_is_in_the_sku_column(self):
+        words, _ = self.words([("2 dip 2cm", 1, 1, "Dipped 2cm")], 1)
+        title = [w for w in words if w["text"] == "Dipped"][0]
+        sku = [w for w in words if w["text"] == "2" and w["top"] > title["top"]][0]
+        qty_hdr = [w for w in words if w["text"] == "Qty"][0]
+        self.assertAlmostEqual(title["x0"], sku["x0"], delta=1.5)           # same left edge as the SKUs
+        self.assertGreater(title["x0"], qty_hdr["x1"])                      # not over the Qty column
