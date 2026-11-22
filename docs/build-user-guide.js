@@ -95,6 +95,7 @@ const doc = new Document({
         ["Green ok", "SKU found. All is well.", "Nothing."],
         ["Yellow ~~", "That item has no SKU in Shopify. Part of the product title was stamped instead.", "Check the packing slip. The SKU should be added to the listing."],
         ["Red !! (and a red “?? CHECK SLIP” on the label)", "Nothing could be read from that slip.", "Read the packing slip by hand."],
+        ["Bold red “WARNING … layout may have changed”", "Many orders in this batch have no SKU, which may mean Shopify changed the packing slip.", "Do not print yet. Compare a few labels with their slips and tell Bruno."],
       ]),
       p("", { spacing: { after: 60 } }),
       p("The last lines say, for example, “32 labels, 2 problems”, and list each problem. A message about a label with no slip (or a slip with no label) means the PDF is incomplete: download it from Shopify again."),

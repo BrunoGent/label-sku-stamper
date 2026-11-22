@@ -59,6 +59,8 @@ The window shows one line per order, then a summary.
 
 The summary ends with a line such as `32 labels, 2 problems` and lists each problem, including pages without a matching label or slip.
 
+**Layout alarm.** If a quarter or more of the orders in a batch have no SKU (or a SKU is suspiciously long), a bold red `!! WARNING ... the packing slip layout may have changed` line appears. It means Shopify may have changed the slip and the SKUs could be wrong in bulk: check the labels against the slips before printing. The threshold is `layout_alarm_percent` in `settings.json` (0 turns it off).
+
 ## Folders and files
 
 ```
@@ -108,6 +110,7 @@ All the options live in **`settings.json`**: open it in Notepad, change a value,
 | `picklist_columns` | `["qty", "sku", "orders"]` | Pick list columns **left to right**; leave a name out to hide that column. Names: `"qty"`, `"sku"`, `"orders"` (SKU always shows). `["sku", "qty"]` puts the SKU first and hides Orders |
 | `picklist_group_titles` | true | Show each group's name (from `sort_groups.json`) as a bold title with a line under it |
 | `picklist_page_per_group` | false | `true` = start every group on a new page |
+| `layout_alarm_percent` | 25 | Warn loudly if this percentage (or more) of the orders have no SKU: Shopify may have changed the slip layout. `0` = off |
 | `open_after` | true | Open the finished PDF automatically |
 | `move_originals` | true | Move the original download to `done\` (when picked from Downloads, or in watch mode) |
 | `strip_typed_text` | false | Remove text typed by hand onto the original labels |
@@ -143,6 +146,21 @@ Rules:
 - **Numbers sort as numbers**: `2`, `4`, `6`, `12`, `20` (not `12` before `2`). With one pattern the whole group runs 2s, then 4s and so on. With several patterns, each pattern's batch comes first and the numbers run within it. To mix types so that all the 2s come together whatever the letters, use one pattern that covers them, e.g. `"* V*"` (then 4 VL, 4 VN, 4 VV are together).
 - The order is not part of the program: edit and save the file, then run again. No restart needed. If the file has a typo the program says so and falls back to plain SKU order. `--no-sort` ignores it and keeps Shopify's order.
 
+## Adding new SKUs to the label order (--suggest)
+
+When the summary shows a yellow `SKUs not in a named sort group` line, run:
+
+```
+py stamp_sku.py --suggest
+```
+(add a file name to use a specific PDF; the default is the newest download). It writes no PDF. For each unlisted SKU it works out a pattern (`4 VL` and `6 VL` become `* VL`; `40mm` becomes `*mm`), and prints ready-to-paste lines such as:
+
+```
+    // matches: 6 VN, 10 VN
+    {"name": "VN", "match": ["* VN"]},
+```
+The lines are also copied to the clipboard. Paste them into `sort_groups.json` **above the "Other" line**, put them in the position you want in the printing order, check the patterns (`*mm` matches anything ending in `mm`; make it more exact if needed), save, and run `--validate`.
+
 ## If a settings file breaks, and how to check your edits
 
 Both files are plain text, so a typo is possible: the usual one is a missing or extra comma between lines.
@@ -172,6 +190,8 @@ py stamp_sku.py a.pdf --strip        remove text already typed on the labels by 
 py stamp_sku.py a.pdf --no-sort      keep Shopify's order
 py stamp_sku.py a.pdf -o out.pdf     choose the output name (one input only)
 py stamp_sku.py a.pdf --move         move the original to done\ afterwards
+py stamp_sku.py a.pdf --suggest      print ready-to-paste sort_groups.json lines for SKUs not in a group
+py stamp_sku.py --validate           check settings.json and sort_groups.json for mistakes
 py stamp_sku.py a.pdf --no-open      do not open the result
 py stamp_sku.py a.pdf --no-picklist  leave the pick list page out
 py stamp_sku.py --downloads D:\x     look in another folder
@@ -211,6 +231,10 @@ Files given by name stay where they are unless `--move` is added.
 ## Privacy
 
 Shipping PDFs contain customers' names and addresses. The repository's `.gitignore` excludes `*.pdf`, `*.csv`, `*.png`, `Labels/`, `done/`. Check `git status` before committing. Do not email or share the PDFs.
+
+## Tests
+
+`py -m unittest discover -s tests -v` runs the automated checks. They build small synthetic slips (no customer data) and test the SKU reading, grouping, suggestions and the layout alarm. Run them after any change to `stamp_sku.py`, and add a case whenever a real slip is read wrongly.
 
 ## Limitations
 

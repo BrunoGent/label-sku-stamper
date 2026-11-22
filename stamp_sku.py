@@ -43,13 +43,14 @@ os.system("")   # lets Windows 10+ consoles show ANSI colours
 
 GREEN, YELLOW, RED, BOLD, DIM, OFF = "\033[32m", "\033[33m", "\033[31m", "\033[1m", "\033[2m", "\033[0m"
 CHECK_TEXT = "?? CHECK SLIP"
+SLIP_COLUMN_EDGE = 260.0   # right edge (points) of the item text on Shopify's 4x6 slip: titles wrap close to here
 
 DEFAULTS = {
     "x": 40.0, "y": 378.0, "size": 11.0, "colour": [0, 0, 0.85],
     "sort_labels": True,
     "title_fallback": True, "title_length": 28,
     "picklist": True, "picklist_size": "4x6", "picklist_columns": ["qty", "sku", "orders"], "picklist_group_titles": True, "picklist_page_per_group": False,
-    "open_after": True, "move_originals": True, "strip_typed_text": False,
+    "layout_alarm_percent": 25, "open_after": True, "move_originals": True, "strip_typed_text": False,
     "out_dir": "Labels", "done_dir": "done", "downloads": None, "pattern": "shipping*.pdf", "watch_seconds": 2,
 }
 FILE_ERRORS = []     # problems found while reading settings.json / sort_groups.json (shown again in the summary)
@@ -300,7 +301,7 @@ def parse_pdf(src):
             else:
                 orders.append({"page": i, "order": "?", "items": [], "slip": False})
         lines_all = [l for s in slips for l in s[2]]
-        colmax = max((l["x1"] for l in lines_all), default=0)
+        colmax = max([l["x1"] for l in lines_all] + [SLIP_COLUMN_EDGE])   # floor: a batch with no wrapped title still needs a sane edge
         for oi, num, lines, marks in slips:
             o = orders[oi]
             o["order"] = num
@@ -554,6 +555,42 @@ def picklist_pages(rows, unknown, title, size="4x6"):
     return list(PdfReader(buf).pages)
 
 
+# --------------------------------------------------------------------------- safety checks and helpers
+
+def layout_alarms(orders):
+    """Warnings that Shopify may have changed the packing-slip layout (so SKUs could be wrong in bulk)."""
+    alarms = []
+    n = len(orders)
+    flagged = sum(1 for o in orders if (not o["items"]) or any(g for _, _, _, g in o["items"]))
+    pct = S["layout_alarm_percent"]
+    if pct and n >= 4 and flagged * 100 >= pct * n:
+        alarms.append(f"{flagged} of {n} orders have no SKU - the packing slip layout may have changed")
+    long_ = [sku for o in orders for _, sku, _, g in o["items"] if not g and len(sku) > 40]
+    if long_:
+        alarms.append(f"{len(long_)} SKU(s) are unusually long (e.g. '{long_[0][:40]}...') - the slip layout may have changed")
+    return alarms
+
+
+def suggest_patterns(skus):
+    """-> {pattern: [skus]}: a sort_groups.json pattern for each kind of SKU ('4 VL' -> '* VL', '40mm' -> '*mm')."""
+    pats = {}
+    for sku in skus:
+        m = re.match(r"^\d+(?:\.\d+)?\s+(.+)$", sku)
+        m2 = re.match(r"^\d+(?:\.\d+)?(\D.*)$", sku)
+        pat = "* " + m.group(1) if m else ("*" + m2.group(1) if m2 else sku)
+        pats.setdefault(pat, []).append(sku)
+    return pats
+
+
+def suggestion_text(skus):
+    lines = []
+    for pat, found in sorted(suggest_patterns(skus).items(), key=lambda kv: natural(kv[0])):
+        name = pat.replace("*", "").strip() or pat
+        lines.append(f"    // matches: {', '.join(found)}")
+        lines.append(f'    {{"name": "{name}", "match": ["{pat}"]}},')
+    return chr(10).join(lines)
+
+
 # --------------------------------------------------------------------------- main work
 
 def unique_path(p):
@@ -626,10 +663,11 @@ def process(src, a, cfg):
                    key=natural) if groups else []
 
     # ---- summary
+    alarms = layout_alarms(orders)
     total = len(orders)
     print(f"\n  {BOLD}Summary{OFF}: {total} labels, {sum(r[1] for r in rows)} items, {len(rows)} different SKUs")
-    colour = GREEN if not (problems or notes or overflow or titled or FILE_ERRORS) else RED
-    n_issues = len(problems) + len(notes) + len(overflow) + len(titled) + len(FILE_ERRORS)
+    colour = GREEN if not (problems or notes or overflow or titled or FILE_ERRORS or alarms) else RED
+    n_issues = len(problems) + len(notes) + len(overflow) + len(titled) + len(FILE_ERRORS) + len(alarms)
     print(f"  {colour}{BOLD}{total} labels, {n_issues} problem{'s' if n_issues != 1 else ''}{OFF}")
     for o in problems:
         print(f"  {RED}- order {o}: no items found on the slip - label says '{CHECK_TEXT}'{OFF}")
@@ -639,11 +677,31 @@ def process(src, a, cfg):
         print(f"  {YELLOW}- order {o}: too many SKUs to fit neatly - check the label{OFF}")
     for n in notes:
         print(f"  {YELLOW}- {n}{OFF}")
+    for al in alarms:
+        print(f"  {RED}{BOLD}!! WARNING: {al}. Check the labels carefully before printing.{OFF}")
     for e in FILE_ERRORS:
         print(f"  {RED}- {e}. The mistake is usually on, or just above, the line number given (often a missing comma). To reset, copy the file from the defaults folder.{OFF}")
     if stray:
-        print(f"  {YELLOW}- SKUs not in a named sort group (add them to sort_groups.json): {', '.join(stray)}{OFF}")
-    if a.check:
+        print(f"  {YELLOW}- SKUs not in a named sort group (add them to sort_groups.json): {', '.join(stray)}. Run with --suggest for ready-to-paste lines.{OFF}")
+    if a.suggest:
+        if stray:
+            text = suggestion_text(stray)
+            print()
+            print(f"  {BOLD}Suggested lines for sort_groups.json{OFF} (paste them ABOVE the 'Other' line, then put them in the order you want):")
+            print()
+            print(text)
+            print()
+            print(f"  {DIM}Check each pattern: '*mm' would also match any other SKU ending in mm. Make a pattern more exact if needed.{OFF}")
+            try:
+                if sys.platform == "win32":
+                    import subprocess
+                    subprocess.run(["clip"], input=text.encode("ascii", "replace"), check=True)
+                    print(f"  {GREEN}(copied to the clipboard){OFF}")
+            except Exception:
+                pass
+        else:
+            print(f"  {GREEN}Every SKU is already in a named sort group - nothing to suggest.{OFF}")
+    if a.check or a.suggest:
         return None
 
     out_dir = Path(a.out_dir)
@@ -753,6 +811,7 @@ def main():
     ap.add_argument("--watch", action="store_true", help="keep running and process new downloads")
     ap.add_argument("--move", action="store_true", help="move processed originals to done\\ (automatic for Downloads/watch)")
     ap.add_argument("--no-open", action="store_true", help="don't open the result")
+    ap.add_argument("--suggest", action="store_true", help="print ready-to-paste sort_groups.json lines for SKUs not in a group (writes no PDF)")
     ap.add_argument("--validate", action="store_true", help="check settings.json and sort_groups.json for mistakes, then stop")
     ap.add_argument("--no-picklist", action="store_true", help="leave the pick list page out")
     ap.add_argument("--downloads", help="folder to look in (default: your Downloads)")

@@ -23,6 +23,9 @@
   "picklist_group_titles": true,      // show each group's name as a title (from sort_groups.json)
   "picklist_page_per_group": false,   // true = start every group on a new page
 
+  // ---- Safety alarm
+  "layout_alarm_percent": 25,      // warn loudly if this % (or more) of orders have no SKU (Shopify may have changed the slip layout). 0 = off
+
   // ---- What happens after
   "open_after": true,           // open the finished PDF automatically
   "move_originals": true,       // move the original download to done\ (when picked from Downloads, or in watch mode)
