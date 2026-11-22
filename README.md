@@ -110,6 +110,8 @@ All the options live in **`settings.json`**: open it in Notepad, change a value,
 | `picklist_columns` | `["qty", "sku", "orders"]` | Pick list columns **left to right**; leave a name out to hide that column. Names: `"qty"`, `"sku"`, `"orders"` (SKU always shows). `["sku", "qty"]` puts the SKU first and hides Orders |
 | `repeat_star` | true | Slip says "REPEAT CUSTOMER": add `*` after the first SKU on the label. `false` = off |
 | `repeat_double_star_from` | 15 | From this many orders (the number in "Order #N" on the slip) use `**` instead. `0` = never |
+| `gift_mark` | true | Slip's NOTES say `GIFT MESSAGE`: add that text as a last line on the label and list the order in the summary. `false` = off |
+| `gift_text` | `GIFT MESSAGE` | The words stamped on a gift-message label |
 | `picklist_group_titles` | true | Show each group's name (from `sort_groups.json`) as a bold title with a line under it |
 | `picklist_page_per_group` | false | `true` = start every group on a new page |
 | `layout_alarm_percent` | 25 | Warn loudly if this percentage (or more) of the orders have no SKU: Shopify may have changed the slip layout. `0` = off |
@@ -122,6 +124,8 @@ All the options live in **`settings.json`**: open it in Notepad, change a value,
 | `watch_seconds` | 2 | Watch mode: how often to look for new downloads |
 
 **Repeat customers.** The program does not know who is a repeat customer; it reads the packing slip. Shopify prints "★ REPEAT CUSTOMER (Order #2) ★" on the slip for web and eBay orders. Etsy orders show it only if the Etsy-Shopify sync tags them and the packing slip template has the repeat-customer line (the template is in the `shopify-packing-slip` project). Slip says repeat, label gets `*`; no repeat text, no star.
+
+**Gift messages.** Etsy makes the A4 gift message page; the sync cannot print it. So the program only reminds you. The Etsy-Shopify sync writes `GIFT MESSAGE (print from Etsy):` into the order note when (and only when) the buyer included a gift message, Shopify prints the note on the slip, and the program reads it from there (only the text after the NOTES heading is searched). The label gets a last line `GIFT MESSAGE` and the summary lists those orders in yellow. A gift order with no message gets nothing.
 
 A typo in a setting name is reported in the window. If the file itself is broken (for example a missing comma) the program says so with the line number and uses its built-in defaults. Command-line options (below) add to or override these for one run.
 

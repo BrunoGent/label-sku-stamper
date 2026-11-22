@@ -27,6 +27,10 @@
   "repeat_star": true,             // true = put * after the first SKU of a repeat customer's label. false = off
   "repeat_double_star_from": 15,   // from this many orders, put ** instead. 0 = never **
 
+  // ---- Gift messages (the slip's NOTES say "GIFT MESSAGE (print from Etsy)")
+  "gift_mark": true,               // true = add a line to the label and list the orders in the summary. false = off
+  "gift_text": "GIFT MESSAGE",     // the words stamped on the label
+
   // ---- Safety alarm
   "layout_alarm_percent": 25,      // warn loudly if this % (or more) of orders have no SKU (Shopify may have changed the slip layout). 0 = off
 

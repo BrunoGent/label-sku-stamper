@@ -116,6 +116,7 @@ const doc = new Document({
       h1("Good to know"),
       bullet("The labels come out in groups, for example all 2cm dipped candles together, then tealights, with honey and beeswax last. Bruno can change the order in a small file called sort_groups.json."),
       bullet("A small * after the SKU on a label means a repeat customer (two ** means a very frequent one). It comes from the packing slip, so it is stamped automatically."),
+      bullet("A last line GIFT MESSAGE on a label means the order has a gift message. Print it from Etsy and put it in the parcel. The window also lists those orders in yellow. A gift order with no message gets nothing."),
       bullet("Labels and downloads are kept in the “Labels” and “done” folders. Keep them; there is no need to delete anything."),
       bullet("The PDFs contain customers’ names and addresses. Do not email or share them, or put them online."),
       bullet("Optional: watch.bat can be left open all day. It stamps each new Shopify download by itself. It stops when you close its window."),

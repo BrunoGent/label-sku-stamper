@@ -51,6 +51,7 @@ DEFAULTS = {
     "title_fallback": True, "title_length": 28,
     "picklist": True, "picklist_size": "4x6", "picklist_columns": ["qty", "sku", "orders"], "picklist_group_titles": True, "picklist_page_per_group": False,
     "repeat_star": True, "repeat_double_star_from": 15,
+    "gift_mark": True, "gift_text": "GIFT MESSAGE",
     "layout_alarm_percent": 25, "open_after": True, "move_originals": True, "strip_typed_text": False,
     "out_dir": "Labels", "done_dir": "done", "downloads": None, "pattern": "shipping*.pdf", "watch_seconds": 2,
 }
@@ -305,6 +306,17 @@ def natural(s):
     return [int(t) if t.isdigit() else t for t in re.split(r"(\d+)", s.lower())]
 
 
+GIFT_RE = re.compile(r"^\W*GIFT\s+MESSAGE", re.I | re.M)
+
+
+def has_gift_message(text):
+    """True when the slip's NOTES section carries a gift message line. The Etsy-Shopify sync writes
+    "GIFT MESSAGE (print from Etsy):" (older orders: "Gift Message:"). Only the text after the NOTES
+    heading is searched, so an item title can never trigger it. A gift order WITHOUT a message does not count."""
+    _, found, notes = text.partition("NOTES")
+    return bool(found and GIFT_RE.search(notes))
+
+
 def parse_pdf(src):
     """-> (orders, notes). orders: [{page, order, items}]; notes: warnings about the file."""
     notes, orders, slips = [], [], []
@@ -315,15 +327,16 @@ def parse_pdf(src):
                 if not orders:
                     notes.append(f"page {i + 1}: packing slip with no label before it - ignored")
                     continue
-                slips.append((len(orders) - 1, order_no(t), *body_lines(pg), repeat_of(t)))
+                slips.append((len(orders) - 1, order_no(t), *body_lines(pg), repeat_of(t), has_gift_message(t)))
             else:
-                orders.append({"page": i, "order": "?", "items": [], "slip": False, "repeat": None})
+                orders.append({"page": i, "order": "?", "items": [], "slip": False, "repeat": None, "gift": False})
         lines_all = [l for s in slips for l in s[2]]
         colmax = max([l["x1"] for l in lines_all] + [SLIP_COLUMN_EDGE])   # floor: a batch with no wrapped title still needs a sane edge
-        for oi, num, lines, marks, rep_n in slips:
+        for oi, num, lines, marks, rep_n, gift in slips:
             o = orders[oi]
             o["order"] = num
             o["repeat"] = rep_n
+            o["gift"] = gift
             o["slip"] = True
             o["items"] += parse_items(lines, marks, colmax)
     for o in orders:
@@ -665,12 +678,15 @@ def process(src, a, cfg):
         star = repeat_mark(o["repeat"])
         if star and text:
             text[0] += " " + star                          # same habit as writing * by hand
-        print(f"  {mark} Order {o['order']:>11}: {' | '.join(text) or '-'}")
+        gift = bool(o.get("gift")) and bool(S["gift_mark"])
+        print(f"  {mark} Order {o['order']:>11}: {' | '.join(text) or '-'}" + (f"  {YELLOW}{BOLD}[{S['gift_text']}]{OFF}" if gift else ""))
         label = writer.add_page(reader.pages[o["page"]])   # attach first, then edit (newer pypdf requires this)
         if a.strip and "/Annots" in label:
             del label["/Annots"]                            # remove text typed by hand
         if not text:
             text = [CHECK_TEXT]
+        if gift:
+            text = text + [S["gift_text"]]                  # own line, last: the gift card comes from Etsy
         w, h = float(label.mediabox.width), float(label.mediabox.height)
         ov, ok = overlay(w, h, text, a.x, a.y, a.size)
         label.merge_page(ov)
@@ -691,6 +707,10 @@ def process(src, a, cfg):
     print(f"\n  {BOLD}Summary{OFF}: {total} labels, {sum(r[1] for r in rows)} items, {len(rows)} different SKUs")
     if repeats:
         print(f"  {repeats} repeat customer{'s' if repeats != 1 else ''} (marked with * on the label)")
+    gifts = [o["order"] for o in orders if o.get("gift")] if S["gift_mark"] else []
+    if gifts:
+        print(f"  {YELLOW}{BOLD}{len(gifts)} order{'s' if len(gifts) != 1 else ''} with a gift message{OFF}{YELLOW}: print "
+              f"{'them' if len(gifts) != 1 else 'it'} from Etsy (labels say {S['gift_text']}): {', '.join(gifts)}{OFF}")
     colour = GREEN if not (problems or notes or overflow or titled or FILE_ERRORS or alarms) else RED
     n_issues = len(problems) + len(notes) + len(overflow) + len(titled) + len(FILE_ERRORS) + len(alarms)
     print(f"  {colour}{BOLD}{total} labels, {n_issues} problem{'s' if n_issues != 1 else ''}{OFF}")

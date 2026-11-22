@@ -16,9 +16,12 @@ LONG = "Handcrafted Coloured Beeswax Taper Candles | Locally Sourced &"   # a fu
 
 
 def make_pdf(path, orders):
-    """orders: list of (order_no, [item]); item = (qty, [text lines]). Layout mimics the Shopify 4x6 slip."""
+    """orders: list of (order_no, [item]) or (order_no, [item], note_lines); item = (qty, [text lines]).
+    Layout mimics the Shopify 4x6 slip; note_lines are printed under the NOTES heading."""
     c = canvas.Canvas(str(path), pagesize=(288, 432))
-    for number, items in orders:
+    for entry in orders:
+        number, items = entry[0], entry[1]
+        note_lines = entry[2] if len(entry) > 2 else []
         c.setFont("Helvetica", 10)
         c.drawString(20, 400, "Royal Mail tracked label")           # the label page
         c.showPage()
@@ -38,6 +41,9 @@ def make_pdf(path, orders):
             top -= (len(lines) - 1) * 9.3 + 16.5
         c.setFont("Helvetica-Bold", 4.4)
         c.drawString(23.4, 150, "NOTES")
+        c.setFont("Helvetica", 6.2)
+        for i, text in enumerate(note_lines):
+            c.drawString(23.4, 140 - i * 9.3, text)
         c.showPage()
     c.save()
 
@@ -137,3 +143,45 @@ class Helpers(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class GiftMessages(unittest.TestCase):
+    """Only a gift MESSAGE (in the slip's NOTES) marks a label; a gift order without one needs nothing."""
+
+    def setUp(self):
+        s.load_settings()
+
+    def gifts(self, note_lines, item_lines=("12 TL",)):
+        orders, _ = parse([("2001", [(1, list(item_lines))], note_lines)])
+        return orders[0]["gift"]
+
+    def test_new_and_old_wording_are_found(self):
+        self.assertTrue(self.gifts(["GIFT MESSAGE (print from Etsy):", "Happy Birthday Mum!"]))
+        self.assertTrue(self.gifts(["Gift Message:", "Happy Birthday Mum!"]))
+
+    def test_no_note_or_other_notes_do_not_count(self):
+        self.assertFalse(self.gifts([]))
+        self.assertFalse(self.gifts(["Buyer Note:", "Please leave with the neighbour"]))
+        self.assertFalse(self.gifts(["GIFT ORDER"]))                      # old wording for a gift with no message
+
+    def test_item_title_cannot_trigger_it(self):
+        self.assertFalse(self.gifts([], item_lines=("Candle with gift message card", "12 TL")))
+
+    def test_gift_message_followed_by_buyer_note(self):
+        self.assertTrue(self.gifts(["GIFT MESSAGE (print from Etsy):", "Love Sam", "Buyer Note:", "Thanks"]))
+
+    def test_end_to_end_label_text(self):
+        import subprocess
+        from pypdf import PdfReader
+        with tempfile.TemporaryDirectory() as d:
+            src, out = Path(d) / "shipping_t.pdf", Path(d) / "out.pdf"
+            make_pdf(src, [("3001", [(1, ["12 TL"])], ["GIFT MESSAGE (print from Etsy):", "Hi"]),
+                           ("3002", [(1, ["60mm"])], [])])
+            run = subprocess.run([sys.executable, str(Path(s.__file__)), str(src), "-o", str(out), "--no-open", "--no-picklist", "--no-sort"],
+                                 capture_output=True, text=True, cwd=d)
+            self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+            pages = [p.extract_text() or "" for p in PdfReader(str(out)).pages]
+            self.assertIn("GIFT MESSAGE", pages[0])
+            self.assertNotIn("GIFT MESSAGE", pages[1])
+            self.assertIn("1 order with a gift message", run.stdout)
+            self.assertIn("3001", run.stdout)
