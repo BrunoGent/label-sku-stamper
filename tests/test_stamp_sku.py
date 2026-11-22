@@ -16,17 +16,21 @@ LONG = "Handcrafted Coloured Beeswax Taper Candles | Locally Sourced &"   # a fu
 
 
 def make_pdf(path, orders):
-    """orders: list of (order_no, [item]) or (order_no, [item], note_lines); item = (qty, [text lines]).
-    Layout mimics the Shopify 4x6 slip; note_lines are printed under the NOTES heading."""
+    """orders: list of (order_no, [item]), (order_no, [item], note_lines) or (order_no, [item], note_lines, repeat_text);
+    item = (qty, [text lines]). Layout mimics the Shopify 4x6 slip; note_lines are printed under the NOTES heading;
+    repeat_text, e.g. REPEAT CUSTOMER (Order #4), is printed under the order number like the real slip."""
     c = canvas.Canvas(str(path), pagesize=(288, 432))
     for entry in orders:
         number, items = entry[0], entry[1]
         note_lines = entry[2] if len(entry) > 2 else []
+        repeat_text = entry[3] if len(entry) > 3 else None
         c.setFont("Helvetica", 10)
         c.drawString(20, 400, "Royal Mail tracked label")           # the label page
         c.showPage()
         c.setFont("Helvetica", 5.2)
         c.drawString(20, 400, f"Order #{number}")
+        if repeat_text:
+            c.drawString(20, 392, repeat_text)
         c.setFont("Helvetica-Bold", 4.4)
         c.drawString(23, 380, "SHIP TO")
         c.drawString(23, 312, "ITEMS")
@@ -185,3 +189,62 @@ class GiftMessages(unittest.TestCase):
             self.assertNotIn("GIFT MESSAGE", pages[1])
             self.assertIn("1 order with a gift message", run.stdout)
             self.assertIn("3001", run.stdout)
+
+
+class RepeatCustomers(unittest.TestCase):
+    """The packing slip template prints "REPEAT CUSTOMER (Order #N)"; the label gets * (or ** from
+    repeat_double_star_from orders). If the template wording changes these tests are the early warning."""
+
+    def setUp(self):
+        s.load_settings()
+
+    def repeat(self, text, number="4001"):
+        orders, _ = parse([(number, [(1, ["12 TL"])], [], text)])
+        return orders[0]
+
+    def test_number_is_read_and_is_not_taken_as_the_order_number(self):
+        o = self.repeat("REPEAT CUSTOMER (Order #4)")
+        self.assertEqual(o["repeat"], 4)
+        self.assertEqual(o["order"], "4001")            # not "4" from "(Order #4)"
+
+    def test_star_glyphs_and_capitals_do_not_matter(self):
+        self.assertEqual(self.repeat("* REPEAT CUSTOMER (Order #12) *")["repeat"], 12)
+        self.assertEqual(self.repeat("Repeat Customer (Order #3)")["repeat"], 3)
+
+    def test_not_a_repeat(self):
+        self.assertIsNone(self.repeat(None)["repeat"])
+        self.assertEqual(s.repeat_mark(None), "")
+
+    def test_repeat_without_a_number_still_counts(self):
+        self.assertEqual(self.repeat("REPEAT CUSTOMER")["repeat"], 0)
+        self.assertEqual(s.repeat_mark(0), "*")
+
+    def test_stars_and_settings(self):
+        self.assertEqual(s.repeat_mark(2), "*")
+        self.assertEqual(s.repeat_mark(14), "*")
+        self.assertEqual(s.repeat_mark(15), "**")
+        old = dict(s.S)
+        try:
+            s.S["repeat_double_star_from"] = 0
+            self.assertEqual(s.repeat_mark(99), "*")
+            s.S["repeat_star"] = False
+            self.assertEqual(s.repeat_mark(5), "")
+        finally:
+            s.S.clear(); s.S.update(old)
+
+    def test_end_to_end_label_text(self):
+        import subprocess
+        from pypdf import PdfReader
+        with tempfile.TemporaryDirectory() as d:
+            src, out = Path(d) / "shipping_t.pdf", Path(d) / "out.pdf"
+            make_pdf(src, [("5001", [(1, ["12 TL"])], [], "REPEAT CUSTOMER (Order #4)"),
+                           ("5002", [(1, ["60mm"])], []),
+                           ("5003", [(2, ["4 2cm"])], [], "REPEAT CUSTOMER (Order #15)")])
+            run = subprocess.run([sys.executable, str(Path(s.__file__)), str(src), "-o", str(out), "--no-open", "--no-picklist", "--no-sort"],
+                                 capture_output=True, text=True, cwd=d)
+            self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+            pages = [p.extract_text() or "" for p in PdfReader(str(out)).pages]
+            self.assertIn("12 TL *", pages[0])
+            self.assertNotIn("*", pages[1])
+            self.assertIn("**", pages[2])
+            self.assertIn("2 repeat customers", run.stdout)
