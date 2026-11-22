@@ -6,9 +6,14 @@
     {"name": "Dipped 2cm",      "match": ["* dip 2cm"]},
     {"name": "Dipped 1.5cm",    "match": ["* dip 1.5"]},
     {"name": "Tealights",       "match": ["* TL"]},
-    {"name": "refills",       "match": ["* refill"]},    
+    {"name": "refills",         "match": ["* refill"]},
+    {"name": "Pillars",         "match": ["60mm", "40mm"]},
     // Specific groups must stay ABOVE general ones: "* dip 2cm" above "* dip *".
     {"name": "Coloured dipped", "match": ["* dip *"]},
+
+    //Votives natural first and then the rest
+    {"name": "Votive natural", "match": ["* VN"]},
+    {"name": "Votive scented", "match": ["* V?"]},
 
     // Everything not listed anywhere lands in the next group (and is reported in the window).
     {"name": "Other (not yet in a group)", "match": ["*"], "warn": true},
