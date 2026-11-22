@@ -121,7 +121,7 @@ All the options live in **`settings.json`**: open it in Notepad, change a value,
 | `pattern` | `shipping*.pdf` | File names picked up from Downloads |
 | `watch_seconds` | 2 | Watch mode: how often to look for new downloads |
 
-**Repeat customers.** The program does not know who is a repeat customer; it reads the packing slip. Shopify prints "★ REPEAT CUSTOMER (Order #2) ★" on the slip for web and eBay orders. Etsy orders show it only if the Etsy-Shopify sync tags them and the packing slip template has the repeat-customer line (see the sync's `docs/shopify-packing-slip-repeat.txt`). Slip says repeat, label gets `*`; no repeat text, no star.
+**Repeat customers.** The program does not know who is a repeat customer; it reads the packing slip. Shopify prints "★ REPEAT CUSTOMER (Order #2) ★" on the slip for web and eBay orders. Etsy orders show it only if the Etsy-Shopify sync tags them and the packing slip template has the repeat-customer line (the template is in the `shopify-packing-slip` project). Slip says repeat, label gets `*`; no repeat text, no star.
 
 A typo in a setting name is reported in the window. If the file itself is broken (for example a missing comma) the program says so with the line number and uses its built-in defaults. Command-line options (below) add to or override these for one run.
 
