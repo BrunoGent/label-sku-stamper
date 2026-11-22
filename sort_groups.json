@@ -12,6 +12,10 @@
 
     // Everything not listed anywhere lands in the next group (and is reported in the window).
     {"name": "Other (not yet in a group)", "match": ["*"], "warn": true},
+
+    // This group prints AFTER the "Other" group above, even though "Other" collects everything
+    // not listed. Reason: the SKUs named here (BW, honey, jars) are matched to THIS group first,
+    // so "Other" only ever gets the leftovers. Result: leftovers first, then these at the very end.
     {"name": "Beeswax and honey (at the end)", "match": ["*BW*", "* h", "*jar"]}
   ]
 }
