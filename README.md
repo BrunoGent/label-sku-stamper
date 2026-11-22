@@ -190,4 +190,4 @@ Shipping PDFs contain customers' names and addresses. The repository's `.gitigno
 ## Documentation
 
 - **User guide (printable):** `docs/Label-Stamper-User-Guide.docx`, for anyone who runs the app.
-- The full SOPs (how to use, and a technical manual) live in the Bees and Sonia operating manual: SOP-FUL-001 and SOP-TEC-001.
+- The full SOPs (how to use, and a technical manual) live in the Beemine operating manual: SOP-FUL-001 and SOP-TEC-001.

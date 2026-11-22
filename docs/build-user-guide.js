@@ -46,7 +46,7 @@ function table(cols, header, rows) {
 const b = (s) => t(s, { bold: true });
 
 const doc = new Document({
-  creator: "Bees and Sonia",
+  creator: "Beemine",
   title: "Printing shipping labels with SKUs - user guide",
   styles: {
     default: { document: { run: { font: FONT, size: 22 } } },
@@ -69,7 +69,7 @@ const doc = new Document({
     footers: {
       default: new Footer({
         children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [
-          t("Bees and Sonia - label stamper user guide - page ", { size: 18, color: "666666" }),
+          t("Beemine - label stamper user guide - page ", { size: 18, color: "666666" }),
           new TextRun({ children: [PageNumber.CURRENT], font: FONT, size: 18, color: "666666" }),
         ] })],
       }),
