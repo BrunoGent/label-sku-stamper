@@ -124,6 +124,10 @@ Rules:
 - **Everything else:** a group whose match list is just `["*"]` collects every SKU not listed anywhere, wherever you put that group. With `"warn": true` the window lists those SKUs each run, so you can add them to a proper group.
 - **Orders with several items** go with the *latest* group among their items, so an order that includes honey travels with the honey, at the end.
 - The pick list uses the same groups and shows each group's name above its SKUs.
+- **`name`** is only a label: it is the heading shown in the window and above each group on the pick list. It plays no part in matching, so call it anything.
+- **Comments:** a line starting with `//` is ignored, so you can leave notes to yourself in the file. (Put each comment on its own line.)
+- **Several types in one batch:** list several patterns in one group, e.g. `"match": ["* VN", "* VJ", "* VL"]`. All the VN come first, then all the VJ, then the VL, each by number. Or make a separate group for each if you want a heading per type on the pick list.
+- **Numbers sort as numbers**: `2`, `4`, `6`, `12`, `20` (not `12` before `2`). With one pattern the whole group runs 2s, then 4s and so on. With several patterns, each pattern's batch comes first and the numbers run within it. To mix types so that all the 2s come together whatever the letters, use one pattern that covers them, e.g. `"* V*"` (then 4 VL, 4 VN, 4 VV are together).
 - The order is not part of the program: edit and save the file, then run again. No restart needed. If the file has a typo the program says so and falls back to plain SKU order. `--no-sort` ignores it and keeps Shopify's order.
 
 ## Command line options

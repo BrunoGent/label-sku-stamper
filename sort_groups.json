@@ -1,11 +1,17 @@
 {
-  "_help": "Labels print in the order of these groups, top to bottom (move a group up or down to change the order). A SKU goes in the FIRST group, from the top, that has a matching pattern; * matches anything, so '* dip 2cm' matches '4 dip 2cm'. Inside a group: pattern order, then by number. A group with match ['*'] collects every SKU not listed anywhere else, wherever you put it; mark it warn:true to be told about those SKUs on each run so you can add them. An order with items from several groups goes with its LATEST group.",
+  "_help": "Labels print in the order of these groups, top to bottom (move a group up or down to change the order). A SKU goes in the FIRST group, from the top, that has a matching pattern; * matches anything, so '* dip 2cm' matches '4 dip 2cm'. Inside a group: pattern order, then by number. A group with match ['*'] collects every SKU not listed anywhere else, wherever you put it; mark it warn:true to be told about those SKUs on each run so you can add them. Lines starting with // are comments. An order with items from several groups goes with its LATEST group.",
+  
   "groups": [
+    // Each group below is one batch of labels, printed from top to bottom.
     {"name": "Dipped 2cm",      "match": ["* dip 2cm"]},
     {"name": "Dipped 1.5cm",    "match": ["* dip 1.5"]},
-    {"name": "Coloured dipped", "match": ["* dip *"]},
     {"name": "Tealights",       "match": ["* TL"]},
+    {"name": "refills",       "match": ["* refill"]},    
+    // Specific groups must stay ABOVE general ones: "* dip 2cm" above "* dip *".
+    {"name": "Coloured dipped", "match": ["* dip *"]},
+
+    // Everything not listed anywhere lands in the next group (and is reported in the window).
     {"name": "Other (not yet in a group)", "match": ["*"], "warn": true},
-    {"name": "Beeswax and honey (at the end)", "match": ["*BW*", "* h"]}
+    {"name": "Beeswax and honey (at the end)", "match": ["*BW*", "* h", "*jar"]}
   ]
 }

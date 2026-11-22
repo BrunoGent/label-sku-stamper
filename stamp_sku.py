@@ -291,7 +291,9 @@ def load_groups():
     if not f.exists():
         return []
     try:
-        data = json.loads(f.read_text(encoding="utf-8"))
+        text = f.read_text(encoding="utf-8")
+        text = chr(10).join(l for l in text.splitlines() if not l.lstrip().startswith("//"))   # // comment lines
+        data = json.loads(text)
     except Exception as e:
         print(f"{YELLOW}sort_groups.json ignored (fix the file): {e}{OFF}")
         return []
