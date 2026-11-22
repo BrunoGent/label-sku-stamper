@@ -17,7 +17,7 @@ Command line:
     py stamp_sku.py a.pdf --x 40 --y 372 --size 11 --strip
 
 Outputs go to the Labels\\ folder next to this script:
-    <name>_sku.pdf         labels only, sorted by SKU, SKUs stamped in blue, with a pick list page
+    <name>_sku.pdf         labels only, sorted into the groups in sort_groups.json, SKUs stamped in blue, with a pick list page
                            (totals per SKU, 4x6in) as the LAST page. It opens automatically.
 
 Defaults can be changed in settings.json (see settings.example.json).
@@ -283,26 +283,74 @@ def overlay(w, h, lines, x, y, size):
     return PdfReader(buf).pages[0], ok
 
 
-def sort_key(o):
-    """No-SKU orders first (so you notice), then single-item orders grouped by SKU, then multi-item."""
-    skus = [s for _, s, _, _ in o["items"]]
+def load_groups():
+    """Sort groups from sort_groups.json (next to the script). First group listed = printed first.
+    A SKU belongs to the FIRST group (top to bottom) with a matching pattern; `*` is a wildcard.
+    A group whose match list is just "*" is the 'everything else' group, wherever it sits in the list."""
+    f = HERE / "sort_groups.json"
+    if not f.exists():
+        return []
+    try:
+        data = json.loads(f.read_text(encoding="utf-8"))
+    except Exception as e:
+        print(f"{YELLOW}sort_groups.json ignored (fix the file): {e}{OFF}")
+        return []
+    groups = []
+    for g in data.get("groups", []):
+        raw = [str(m).strip().lower() for m in g.get("match", [])]
+        pats = [re.compile("^" + ".*".join(re.escape(x) for x in m.split("*")) + "$") for m in raw if m != "*"]
+        groups.append({"name": g.get("name", "?"), "pats": pats, "warn": bool(g.get("warn")), "catch": "*" in raw})
+    return groups
+
+
+def group_of(sku, groups):
+    """-> (group index, pattern index). Unmatched SKUs get index len(groups) (sorted last)."""
+    k = sku.lower().strip()
+    for gi, g in enumerate(groups):
+        for pi, pat in enumerate(g["pats"]):
+            if pat.match(k):
+                return gi, pi
+    for gi, g in enumerate(groups):
+        if g["catch"]:
+            return gi, 0
+    return len(groups), 0
+
+
+def group_name(gi, groups):
+    return groups[gi]["name"] if gi < len(groups) else "Not in any group"
+
+
+def order_group(o, groups):
+    """An order sits in the LATEST group of any of its items, so an order containing an
+    'at the end' item (honey, beeswax...) goes with the end items."""
+    return max((group_of(s, groups)[0] for _, s, _, _ in o["items"]), default=len(groups))
+
+
+def sort_key(o, groups):
+    """Orders to check first, then by group (order of sort_groups.json), then single-item orders
+    by pattern order and SKU, then multi-item orders."""
+    items = [(group_of(s, groups)[1], natural(s)) for _, s, _, _ in o["items"]]
     bad = (not o["items"]) or any(g for _, _, _, g in o["items"])
-    return (0 if bad else 1, 0 if len(skus) <= 1 else 1, [natural(s) for s in skus], natural(o["order"]))
+    return (0 if bad else 1, order_group(o, groups), 0 if len(items) <= 1 else 1, items, natural(o["order"]))
 
 
 # --------------------------------------------------------------------------- pick list
 
-def picklist(orders):
-    """-> (rows [(sku, total_qty, n_orders)], unknown [(qty, title, order)])"""
+def picklist(orders, groups):
+    """-> (rows [(sku, total_qty, n_orders, group_name)] in group order, unknown [(qty, title, order)])"""
     tot, cnt, unknown = {}, {}, []
     for o in orders:
         if not o["items"]:
             unknown.append((0, "no items found on the slip", o["order"]))
         for q, s, title, guessed in o["items"]:
-            s = s + "  (from title)" if guessed else s
-            tot[s] = tot.get(s, 0) + q
-            cnt[s] = cnt.get(s, 0) + 1
-    rows = sorted(((s, tot[s], cnt[s]) for s in tot), key=lambda r: natural(r[0]))
+            key = (s, guessed)
+            tot[key] = tot.get(key, 0) + q
+            cnt[key] = cnt.get(key, 0) + 1
+    def k(key):
+        gi, pi = group_of(key[0], groups)
+        return (gi, pi, natural(key[0]))
+    rows = [((s + "  (from title)" if g else s), tot[(s, g)], cnt[(s, g)], group_name(group_of(s, groups)[0], groups))
+            for (s, g) in sorted(tot, key=k)]
     return rows, unknown
 
 
@@ -346,15 +394,26 @@ def picklist_pages(rows, unknown, title, size="4x6"):
             head(page)
 
     max_chars = int((qx - m - 20) / (big * 0.5))
-    for sku, q, n in rows:
+    last_group = None
+    for sku, q, n, gname in rows:
+        if gname != last_group:
+            if last_group is not None:
+                y -= pitch * 0.3
+            room(2)
+            c.setFillColorRGB(0.35, 0.35, 0.35)
+            c.setFont(fn, small)
+            c.drawString(m, y, safe_text(gname).upper()[:int((ox - m) / (small * 0.55))])
+            y -= pitch * 0.85
+            last_group = gname
         room()
         c.setFillColorRGB(0, 0, 0)
         c.setFont(fn, big)
-        c.drawString(m, y, safe_text(sku)[:max_chars])
+        c.drawString(m + 4, y, safe_text(sku)[:max_chars])
         c.drawRightString(qx, y, str(q))
         c.setFont(fn, mid)
         c.drawRightString(ox, y, str(n))
         y -= pitch
+    y -= pitch * 0.4
     room(2)
     c.line(m, y + pitch - 4, ox, y + pitch - 4)
     c.setFont(fn, big)
@@ -410,11 +469,13 @@ def process(src, a, cfg):
         print(f"  {RED}no packing slips found - is this a Shopify labels+slips PDF? (already processed?){OFF}")
         return None
 
+    groups = load_groups()
     if a.sort:
-        orders.sort(key=sort_key)
+        orders.sort(key=lambda o: sort_key(o, groups))
     reader = PdfReader(str(src))
     writer = PdfWriter()
     problems, titled, overflow, busiest = [], [], [], (0, 0)
+    last_group = None
     for n, o in enumerate(orders):
         text = [fmt(q, s) for q, s, _, _ in o["items"]]
         bad = not text
@@ -424,6 +485,11 @@ def process(src, a, cfg):
         elif guessed:
             titled.append(o["order"])
         mark = f"{RED}!!{OFF}" if bad else (f"{YELLOW}~~{OFF}" if guessed else f"{GREEN}ok{OFF}")
+        if groups and a.sort and not bad:
+            gn = group_name(order_group(o, groups), groups)
+            if gn != last_group:
+                print(f"  {DIM}--- {gn} ---{OFF}")
+                last_group = gn
         print(f"  {mark} Order {o['order']:>11}: {' | '.join(text) or '-'}")
         label = writer.add_page(reader.pages[o["page"]])   # attach first, then edit (newer pypdf requires this)
         if a.strip and "/Annots" in label:
@@ -438,7 +504,10 @@ def process(src, a, cfg):
         if len(text) > busiest[0]:
             busiest = (len(text), n)
 
-    rows, unknown = picklist(orders)
+    rows, unknown = picklist(orders, groups)
+    stray = sorted({s for o in orders for _, s, _, g in o['items']
+                    if not g and (group_of(s, groups)[0] >= len(groups) or groups[group_of(s, groups)[0]]['warn'])},
+                   key=natural) if groups else []
 
     # ---- summary
     total = len(orders)
@@ -454,6 +523,8 @@ def process(src, a, cfg):
         print(f"  {YELLOW}- order {o}: too many SKUs to fit neatly - check the label{OFF}")
     for n in notes:
         print(f"  {YELLOW}- {n}{OFF}")
+    if stray:
+        print(f"  {YELLOW}- SKUs not in a named sort group (add them to sort_groups.json): {', '.join(stray)}{OFF}")
     if a.check:
         return None
 

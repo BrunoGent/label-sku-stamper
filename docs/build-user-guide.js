@@ -85,7 +85,7 @@ const doc = new Document({
       h1("Printing a batch of labels"),
       step([b("Download from Shopify. "), t("Download the shipping documents for the batch (4x6 size). The file goes into your Downloads folder, with a name starting “shipping”.")]),
       step([b("Open the labeltest folder "), t("(C:\\labeltest) and double-click "), b("run.bat"), t(". A black window opens and lists every order with its SKU(s). It uses the newest shipping file in Downloads by itself. To use a different file, drag that PDF onto run.bat instead.")]),
-      step([b("Read the list in the window. "), t("The next section explains the colours.")]),
+      step([b("Read the list in the window. "), t("The next section explains the colours. A yellow line at the end listing “SKUs not in a named sort group” just means some new SKUs need adding to the label order; tell Bruno.")]),
       step([b("The finished PDF opens by itself. "), t("Look through it. Each label should show a blue SKU at the bottom, clear of the barcode and the address. The last page is the pick list.")]),
       step([b("Print the whole PDF "), t("on the label printer (4x6in). Labels come out sorted so identical orders are together, and anything that needs checking comes first. The pick list comes out last. To print only the pick list, print only the last page.")]),
       step([b("Press any key "), t("to close the black window. Your download is moved to the “done” folder, so the next run will not use it again. Nothing is deleted.")]),
@@ -113,6 +113,7 @@ const doc = new Document({
       p("Open the “done” folder, and drag the original PDF onto run.bat. A new file is made in the “Labels” folder; the earlier one is not replaced."),
 
       h1("Good to know"),
+      bullet("The labels come out in groups, for example all 2cm dipped candles together, then tealights, with honey and beeswax last. Bruno can change the order in a small file called sort_groups.json."),
       bullet("Labels and downloads are kept in the “Labels” and “done” folders. Keep them; there is no need to delete anything."),
       bullet("The PDFs contain customers’ names and addresses. Do not email or share them, or put them online."),
       bullet("Optional: watch.bat can be left open all day. It stamps each new Shopify download by itself. It stops when you close its window."),

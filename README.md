@@ -31,7 +31,7 @@ For every order in the Shopify PDF it:
 2. Reads the items on the slip and works out each SKU and quantity. A quantity above 1 is written as `3 x kg h`; a quantity of 1 is just the SKU.
 3. Stamps those lines in blue at the bottom of the label (below the address area, clear of the barcode).
 4. Drops the packing slips, so the output contains labels only.
-5. Sorts the labels so identical single-item orders print together. Orders that need checking come first.
+5. Sorts the labels into the **groups** you define in `sort_groups.json` (for example all 2cm dipped candles together, then tealights, with honey and beeswax last), and by number within each group. Orders that need checking come first.
 6. Adds a **pick list** page at the end: the total quantity of each SKU in the batch, for collecting stock.
 7. Saves one PDF in the `Labels` folder and opens it.
 
@@ -68,6 +68,7 @@ labeltest/
   stamp_sku.py             the program
   requirements.txt         Python packages needed
   settings.example.json    copy to settings.json to change defaults
+  sort_groups.json         the label order: which SKUs go together, and in what order
   docs/                    printable user guide
   Labels/                  results: <name>_sku.pdf          (created on first run)
   done/                    originals after processing        (created on first run)
@@ -106,6 +107,25 @@ Defaults work as they are. To change them, copy `settings.example.json` to `sett
 
 To tune the position: run with `--preview`, look at the PNG it opens, change `--x`, `--y` or `--size`, and repeat. Then put the final numbers in `settings.json`.
 
+## Choosing the label order (sort_groups.json)
+
+Labels are printed in groups, in the order the groups are listed in `sort_groups.json`. Open it in Notepad. Each group has a name and a list of SKU patterns:
+
+```json
+{"name": "Dipped 2cm", "match": ["* dip 2cm"]},
+{"name": "Tealights",  "match": ["* TL"]},
+```
+
+Rules:
+- **`*` matches anything.** `* dip 2cm` matches `2 dip 2cm`, `4 dip 2cm`, `12 dip 2cm`. Capitals do not matter.
+- **Order = order in the file.** Move a group up or down to print it earlier or later. Put things you want at the end (beeswax, honey, non-candles) in the last group.
+- **First match wins.** A SKU goes into the first group, from the top, that matches it. So put specific groups (`* dip 2cm`) above general ones (`* dip *`, which then collects the coloured dipped candles).
+- **Inside a group**, labels are ordered by the order of the patterns, then by number (`2 dip 2cm`, `4 dip 2cm`, `12 dip 2cm`).
+- **Everything else:** a group whose match list is just `["*"]` collects every SKU not listed anywhere, wherever you put that group. With `"warn": true` the window lists those SKUs each run, so you can add them to a proper group.
+- **Orders with several items** go with the *latest* group among their items, so an order that includes honey travels with the honey, at the end.
+- The pick list uses the same groups and shows each group's name above its SKUs.
+- The order is not part of the program: edit and save the file, then run again. No restart needed. If the file has a typo the program says so and falls back to plain SKU order. `--no-sort` ignores it and keeps Shopify's order.
+
 ## Command line options
 
 ```
@@ -136,7 +156,7 @@ Files given by name stay where they are unless `--move` is added.
 - **SKU rule.** The SKU is the last line of an item block, unless the line before it was a wrapped line of the title (meaning the last line is just the rest of the title and the item has no SKU).
 - **No SKU.** The `[bracketed option]` from the title is stamped, or the first ~28 characters of the title, and the order is flagged `~~`.
 - **Stamping.** The text is drawn onto a transparent page and merged on top of the label. It uses Arial if available, and shrinks or uses two columns if there are many lines.
-- **Sort.** Orders to check first, then single-item orders grouped by SKU in natural order (`2 dip` before `12 dip`), then multi-item orders.
+- **Sort.** Orders to check first, then by group (`sort_groups.json`), then single-item orders by pattern and number (`2 dip` before `12 dip`), then multi-item orders in that group.
 - **Output.** Sorted labels, then the pick list pages, written to one PDF.
 
 ## Troubleshooting
@@ -148,6 +168,7 @@ Files given by name stay where they are unless `--move` is added.
 | "no packing slips found" | The file is already stamped (name ends `_sku`) or is not a labels+slips PDF | Use the original (it is in `done`) |
 | Wrong SKU, or two items merged | Shopify changed the slip layout | `py stamp_sku.py file.pdf --check`; see `parse_items` in `stamp_sku.py` |
 | Stamp overlaps label printing | Different label layout | `--preview`, then adjust `x`, `y`, `size` |
+| A SKU is in the wrong place in the order | It matched an earlier group, or no group | Edit `sort_groups.json` (specific patterns above general ones) |
 | "original is still locked" (watch mode) | Browser or antivirus is using the download | Harmless: it is left where it is |
 | The PDF does not open by itself | No default PDF viewer | Open the newest file in `Labels` |
 | Too many SKUs to fit | A very large order | Flagged in the summary; read the slip |
