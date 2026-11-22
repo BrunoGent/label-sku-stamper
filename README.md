@@ -81,7 +81,7 @@ label-sku-stamper/
 ## Setup on a new PC
 
 1. Install Python 3 from python.org (tick **Add Python to PATH**) or the Microsoft Store.
-2. Get the code: `git clone https://github.com/BrunoGent/label-sku-stamper` (or download the ZIP) into e.g. `C:\label-sku-stamper`.
+2. Get the code: `git clone https://github.com/BrunoGent/label-sku-stamper` (or download the ZIP) into e.g. `C:\beemine-automations\label-sku-stamper`.
 3. Open a terminal in that folder and install the packages:
 
    ```
