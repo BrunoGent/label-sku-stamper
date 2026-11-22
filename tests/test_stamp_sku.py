@@ -1,4 +1,4 @@
-"""Regression tests. Run from the labeltest folder:   py -m unittest discover -s tests -v
+"""Regression tests. Run from the label-sku-stamper folder:   py -m unittest discover -s tests -v
 
 They build small synthetic Shopify-style PDFs (label page + packing-slip page) - no customer data -
 and check the SKU reading, grouping, suggestions and the layout alarm. Run them after any change to

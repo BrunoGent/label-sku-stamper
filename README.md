@@ -64,7 +64,7 @@ The summary ends with a line such as `32 labels, 2 problems` and lists each prob
 ## Folders and files
 
 ```
-labeltest/
+label-sku-stamper/
   run.bat                  double-click to run
   watch.bat                leave open to process new downloads automatically
   stamp_sku.py             the program
@@ -81,7 +81,7 @@ labeltest/
 ## Setup on a new PC
 
 1. Install Python 3 from python.org (tick **Add Python to PATH**) or the Microsoft Store.
-2. Get the code: `git clone https://github.com/BrunoGent/label-sku-stamper` (or download the ZIP) into e.g. `C:\labeltest`.
+2. Get the code: `git clone https://github.com/BrunoGent/label-sku-stamper` (or download the ZIP) into e.g. `C:\label-sku-stamper`.
 3. Open a terminal in that folder and install the packages:
 
    ```
