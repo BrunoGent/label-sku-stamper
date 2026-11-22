@@ -382,14 +382,15 @@ def overlay(w, h, lines, x, y, size):
 
 
 def glob_to_regex(pattern):
-    """A sort_groups.json pattern -> regex. `*` = any text (or none), `?` = exactly one character."""
-    parts = [".*" if ch == "*" else "." if ch == "?" else re.escape(ch) for ch in pattern]
+    """A sort_groups.json pattern -> regex. `*` = any text (or none), `_` = exactly one character
+    (not a space), the same symbol as in the Candle Batch Summary app. The old `?` still works."""
+    parts = [".*" if ch == "*" else r"\S" if ch in "_?" else re.escape(ch) for ch in pattern]
     return re.compile("^" + "".join(parts) + "$")
 
 
 def load_groups():
     """Sort groups from sort_groups.json (next to the script). First group listed = printed first.
-    A SKU belongs to the FIRST group (top to bottom) with a matching pattern; `*` is any text, `?` one character.
+    A SKU belongs to the FIRST group (top to bottom) with a matching pattern; `*` is any text, `_` one character.
     A group whose match list is just "*" is the 'everything else' group, wherever it sits in the list."""
     f = HERE / "sort_groups.json"
     FILE_ERRORS[:] = [e for e in FILE_ERRORS if not e.startswith("sort_groups.json")]

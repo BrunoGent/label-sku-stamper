@@ -125,12 +125,14 @@ class Grouping(unittest.TestCase):
     def test_numbers_sort_as_numbers(self):
         self.assertLess(s.natural("2 dip 2cm"), s.natural("12 dip 2cm"))
 
-    def test_question_mark_is_exactly_one_character(self):
-        pat = s.glob_to_regex("* v?")
-        for ok in ("6 VL", "6 vn", "12 VC"):
-            self.assertTrue(pat.match(ok.lower()), ok)
-        for bad in ("6 V", "6 VAN", "6 vase", "6 VL x"):
-            self.assertFalse(pat.match(bad.lower()), bad)
+    def test_underscore_is_exactly_one_character(self):
+        # "_" as in the Candle Batch Summary app; the old "?" still works the same.
+        for pattern in ("* v_", "* v?"):
+            pat = s.glob_to_regex(pattern)
+            for ok in ("6 VL", "6 vn", "12 VC"):
+                self.assertTrue(pat.match(ok.lower()), (pattern, ok))
+            for bad in ("6 V", "6 VAN", "6 vase", "6 VL x", "6 V "):
+                self.assertFalse(pat.match(bad.lower()), (pattern, bad))
         self.assertTrue(s.glob_to_regex("*dip*").match("4 dip 2cm"))      # * still means any text
         self.assertFalse(s.glob_to_regex("a.c").match("abc"))              # other characters stay literal
 

@@ -3,7 +3,8 @@
   // Lines starting with // are comments and are ignored. See README.md ("Choosing the label order").
   // Labels print in the order of these groups, top to bottom. A SKU goes in the FIRST group, from the top,
   // with a matching pattern. * matches anything: "* dip 2cm" matches "4 dip 2cm".
-  // ? matches exactly one character: "* V?" matches "6 VL", "6 VN", "12 VC" (but not "6 Vase").
+  // _ matches exactly one character: "* V_" matches "6 VL", "6 VN", "12 VC" (but not "6 Vase").
+  // (Same symbol as in the Candle Batch Summary app. The old ? still works but use _.)
   "groups": [
     // Specific groups go ABOVE general ones: "* dip 2cm" above "* dip *".
     {"name": "Dipped 2cm",      "match": ["* dip 2cm"]},

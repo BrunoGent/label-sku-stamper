@@ -142,7 +142,7 @@ Labels are printed in groups, in the order the groups are listed in `sort_groups
 
 Rules:
 - **`*` matches anything.** `* dip 2cm` matches `2 dip 2cm`, `4 dip 2cm`, `12 dip 2cm`. Capitals do not matter.
-- **`?` matches exactly one character.** `* V?` matches `6 VL`, `6 VN`, `12 VC` (any one letter after the V) but not `6 V` or `6 Vase`. One pattern can therefore cover a whole family of SKUs: `{"name": "V scents", "match": ["* V?"]}`.
+- **`_` matches exactly one character** (not a space). `* V_` matches `6 VL`, `6 VN`, `12 VC` (any one letter after the V) but not `6 V` or `6 Vase`. One pattern can therefore cover a whole family of SKUs: `{"name": "V scents", "match": ["* V_"]}`. This is the same symbol as in the Candle Batch Summary app. (Older files used `?` for this; it still works, but write `_`.)
 - **Order = order in the file.** Move a group up or down to print it earlier or later. Put things you want at the end (beeswax, honey, non-candles) in the last group.
 - **First match wins.** A SKU goes into the first group, from the top, that matches it. So put specific groups (`* dip 2cm`) above general ones (`* dip *`, which then collects the coloured dipped candles).
 - **Inside a group**, labels are ordered by the order of the patterns, then by number (`2 dip 2cm`, `4 dip 2cm`, `12 dip 2cm`).
