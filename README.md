@@ -67,7 +67,7 @@ labeltest/
   watch.bat                leave open to process new downloads automatically
   stamp_sku.py             the program
   requirements.txt         Python packages needed
-  settings.example.json    copy to settings.json to change defaults
+  settings.json            all options (edit in Notepad)
   sort_groups.json         the label order: which SKUs go together, and in what order
   docs/                    printable user guide
   Labels/                  results: <name>_sku.pdf          (created on first run)
@@ -93,19 +93,31 @@ Packages: pypdf, pdfplumber, reportlab, pypdfium2.
 
 ## Settings
 
-Defaults work as they are. To change them, copy `settings.example.json` to `settings.json` (this file is git-ignored) and edit it.
+All the options live in **`settings.json`**: open it in Notepad, change a value, save, and run again (no restart). Lines starting with `//` (or the end of a line after `//`) are notes and are ignored. The label *order* is in the other file, `sort_groups.json` (below). Both files hold no customer data and are part of the repository.
 
 | Setting | Default | Meaning |
 |---|---|---|
 | `x`, `y` | 40, 378 | Where the first stamped line starts, in points from the **left** and **top** of the label (4x6in = 288 x 432 points) |
 | `size` | 11 | Font size in points. Text shrinks automatically if there are many lines |
-| `out_dir` | `Labels` | Where results go (relative to the program folder, or a full path) |
-| `done_dir` | `done` | Where processed originals go |
-| `downloads` | Windows Downloads folder | Folder searched for new files. Normally leave as `null` |
+| `colour` | `[0, 0, 0.85]` | Stamp colour as red, green, blue (each 0 to 1). `[0, 0, 0]` is black |
+| `sort_labels` | true | `false` = keep Shopify's order and ignore `sort_groups.json` |
+| `title_fallback` | true | Item has no SKU: `true` stamps part of the title, `false` stamps `?? CHECK SLIP` |
+| `title_length` | 28 | Characters of the title to stamp (a `[bracketed option]` is used in full) |
+| `picklist` | true | `false` = no pick list page |
+| `picklist_size` | `4x6` | `4x6` (label printer) or `a4` |
+| `picklist_group_titles` | true | Show each group's name (from `sort_groups.json`) as a bold title with a line under it |
+| `picklist_page_per_group` | false | `true` = start every group on a new page |
+| `open_after` | true | Open the finished PDF automatically |
+| `move_originals` | true | Move the original download to `done\` (when picked from Downloads, or in watch mode) |
+| `strip_typed_text` | false | Remove text typed by hand onto the original labels |
+| `out_dir`, `done_dir` | `Labels`, `done` | Where results and processed originals go (relative to the program folder, or a full path) |
+| `downloads` | `null` | `null` = your Windows Downloads folder, or a path such as `"D:/Downloads"` |
 | `pattern` | `shipping*.pdf` | File names picked up from Downloads |
-| `picklist_size` | `4x6` | Pick list page size. `a4` for A4 |
+| `watch_seconds` | 2 | Watch mode: how often to look for new downloads |
 
-To tune the position: run with `--preview`, look at the PNG it opens, change `--x`, `--y` or `--size`, and repeat. Then put the final numbers in `settings.json`.
+A typo in a setting name is reported in the window. If the file itself is broken (for example a missing comma) the program says so with the line number and uses its built-in defaults. Command-line options (below) add to or override these for one run.
+
+To tune the position: run with `--preview`, look at the PNG it opens, change `x`, `y` or `size`, and repeat.
 
 ## Choosing the label order (sort_groups.json)
 
@@ -123,7 +135,7 @@ Rules:
 - **Inside a group**, labels are ordered by the order of the patterns, then by number (`2 dip 2cm`, `4 dip 2cm`, `12 dip 2cm`).
 - **Everything else:** a group whose match list is just `["*"]` collects every SKU not listed anywhere, wherever you put that group. With `"warn": true` the window lists those SKUs each run, so you can add them to a proper group.
 - **Orders with several items** go with the *latest* group among their items, so an order that includes honey travels with the honey, at the end.
-- The pick list uses the same groups and shows each group's name above its SKUs.
+- The pick list uses the same groups and shows each group's `name` as a bold title above its SKUs (`picklist_group_titles`; `picklist_page_per_group` starts each group on a new page).
 - **`name`** is only a label: it is the heading shown in the window and above each group on the pick list. It plays no part in matching, so call it anything.
 - **Comments:** a line starting with `//` is ignored, so you can leave notes to yourself in the file. (Put each comment on its own line.)
 - **Several types in one batch:** list several patterns in one group, e.g. `"match": ["* VN", "* VJ", "* VL"]`. All the VN come first, then all the VJ, then the VL, each by number. Or make a separate group for each if you want a heading per type on the pick list.
@@ -143,6 +155,7 @@ py stamp_sku.py a.pdf --no-sort      keep Shopify's order
 py stamp_sku.py a.pdf -o out.pdf     choose the output name (one input only)
 py stamp_sku.py a.pdf --move         move the original to done\ afterwards
 py stamp_sku.py a.pdf --no-open      do not open the result
+py stamp_sku.py a.pdf --no-picklist  leave the pick list page out
 py stamp_sku.py --downloads D:\x     look in another folder
 py stamp_sku.py --watch              watch mode (below)
 ```
@@ -179,7 +192,7 @@ Files given by name stay where they are unless `--move` is added.
 
 ## Privacy
 
-Shipping PDFs contain customers' names and addresses. The repository's `.gitignore` excludes `*.pdf`, `*.csv`, `*.png`, `Labels/`, `done/` and `settings.json`. Check `git status` before committing. Do not email or share the PDFs.
+Shipping PDFs contain customers' names and addresses. The repository's `.gitignore` excludes `*.pdf`, `*.csv`, `*.png`, `Labels/`, `done/`. Check `git status` before committing. Do not email or share the PDFs.
 
 ## Limitations
 

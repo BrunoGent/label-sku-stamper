@@ -20,7 +20,7 @@ Outputs go to the Labels\\ folder next to this script:
     <name>_sku.pdf         labels only, sorted into the groups in sort_groups.json, SKUs stamped in blue, with a pick list page
                            (totals per SKU, 4x6in) as the LAST page. It opens automatically.
 
-Defaults can be changed in settings.json (see settings.example.json).
+All options are in settings.json (edit in Notepad); the label order is in sort_groups.json.
 Needs: pypdf, pdfplumber, reportlab, pypdfium2  (pip install -r requirements.txt)
 """
 import argparse, io, json, logging, os, re, shutil, statistics, sys, time
@@ -42,11 +42,17 @@ HERE = Path(__file__).resolve().parent
 os.system("")   # lets Windows 10+ consoles show ANSI colours
 
 GREEN, YELLOW, RED, BOLD, DIM, OFF = "\033[32m", "\033[33m", "\033[31m", "\033[1m", "\033[2m", "\033[0m"
-BLUE = (0, 0, 0.85)
 CHECK_TEXT = "?? CHECK SLIP"
 
-DEFAULTS = {"x": 40.0, "y": 378.0, "size": 11.0, "out_dir": "Labels", "done_dir": "done",
-            "downloads": None, "pattern": "shipping*.pdf", "picklist_size": "4x6"}
+DEFAULTS = {
+    "x": 40.0, "y": 378.0, "size": 11.0, "colour": [0, 0, 0.85],
+    "sort_labels": True,
+    "title_fallback": True, "title_length": 28,
+    "picklist": True, "picklist_size": "4x6", "picklist_group_titles": True, "picklist_page_per_group": False,
+    "open_after": True, "move_originals": True, "strip_typed_text": False,
+    "out_dir": "Labels", "done_dir": "done", "downloads": None, "pattern": "shipping*.pdf", "watch_seconds": 2,
+}
+S = dict(DEFAULTS)     # the live settings (settings.json merged over DEFAULTS); set by load_settings()
 
 
 # --------------------------------------------------------------------------- settings
@@ -73,15 +79,45 @@ def downloads_folder():
     return Path.home() / "Downloads"
 
 
+def read_json(path):
+    """JSON file where // starts a comment (a whole line, or the end of a line). // inside "quotes" is kept."""
+    out = []
+    for line in Path(path).read_text(encoding="utf-8").splitlines():
+        in_str, esc, cut = False, False, None
+        for i, ch in enumerate(line):
+            if in_str:
+                if esc:
+                    esc = False
+                elif ch == "\\":
+                    esc = True
+                elif ch == '"':
+                    in_str = False
+            elif ch == '"':
+                in_str = True
+            elif ch == "/" and line[i:i + 2] == "//":
+                cut = i
+                break
+        out.append(line if cut is None else line[:cut])
+    return json.loads(chr(10).join(out))
+
+
 def load_settings():
-    s = dict(DEFAULTS)
+    """Merge settings.json over the defaults. Unknown names are reported (usually a typo)."""
+    S.clear()
+    S.update(DEFAULTS)
     f = HERE / "settings.json"
     if f.exists():
         try:
-            s.update({k: v for k, v in json.loads(f.read_text(encoding="utf-8")).items() if k in DEFAULTS})
+            for k, v in read_json(f).items():
+                if k.startswith("_"):
+                    continue
+                if k in DEFAULTS:
+                    S[k] = v
+                else:
+                    print(f"{YELLOW}settings.json: unknown setting '{k}' ignored (typo?){OFF}")
         except Exception as e:
-            print(f"{YELLOW}settings.json ignored: {e}{OFF}")
-    return s
+            print(f"{YELLOW}settings.json ignored (fix the file): {e}{OFF}")
+    return S
 
 
 def resolve_dir(value, base=HERE):
@@ -109,6 +145,26 @@ def font_name():
                 except Exception:
                     pass
     return _FONT
+
+
+_BOLD = None
+
+
+def font_bold():
+    global _BOLD
+    if _BOLD is None:
+        _BOLD = "Helvetica-Bold"
+        if font_name() == "LabelFont":
+            for cand in (r"C:\Windows\Fontsrialbd.ttf", "/Library/Fonts/Arial Bold.ttf",
+                         "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"):
+                if Path(cand).exists():
+                    try:
+                        pdfmetrics.registerFont(TTFont("LabelFontBold", cand))
+                        _BOLD = "LabelFontBold"
+                        break
+                    except Exception:
+                        pass
+    return _BOLD
 
 
 def safe_text(t):
@@ -197,7 +253,8 @@ def parse_items(lines, qty_marks, colmax):
             wrapped = prev["x1"] + last["first_w"] + 1.5 > colmax + 0.5   # next word wouldn't fit -> title continues
             if not wrapped:
                 sku = last["text"]
-        out.append((qty, sku or title_guess(title), title, sku is None))   # last item: True = SKU was guessed from the title
+        shown = title_guess(title, S["title_length"]) if S["title_fallback"] else CHECK_TEXT
+        out.append((qty, sku or shown, title, sku is None))   # last item: True = no SKU on the slip
     return out
 
 
@@ -275,7 +332,7 @@ def overlay(w, h, lines, x, y, size):
     col_w = (w - x - 10) / cols
     for n, t in enumerate(lines):
         col, row = divmod(n, per_col)
-        c.setFillColorRGB(*((0.85, 0, 0) if CHECK_TEXT in t else BLUE))
+        c.setFillColorRGB(*((0.85, 0, 0) if CHECK_TEXT in t else tuple(S["colour"])))
         c.setFont(font_name(), s)
         c.drawString(x + col * col_w, h - y - row * (s + 1.5), safe_text(t))
     c.save()
@@ -291,9 +348,7 @@ def load_groups():
     if not f.exists():
         return []
     try:
-        text = f.read_text(encoding="utf-8")
-        text = chr(10).join(l for l in text.splitlines() if not l.lstrip().startswith("//"))   # // comment lines
-        data = json.loads(text)
+        data = read_json(f)
     except Exception as e:
         print(f"{YELLOW}sort_groups.json ignored (fix the file): {e}{OFF}")
         return []
@@ -351,7 +406,7 @@ def picklist(orders, groups):
     def k(key):
         gi, pi = group_of(key[0], groups)
         return (gi, pi, natural(key[0]))
-    rows = [((s + "  (from title)" if g else s), tot[(s, g)], cnt[(s, g)], group_name(group_of(s, groups)[0], groups))
+    rows = [((s + ("  (from title)" if S["title_fallback"] else "  (no SKU)") if g else s), tot[(s, g)], cnt[(s, g)], group_name(group_of(s, groups)[0], groups))
             for (s, g) in sorted(tot, key=k)]
     return rows, unknown
 
@@ -400,12 +455,21 @@ def picklist_pages(rows, unknown, title, size="4x6"):
     for sku, q, n, gname in rows:
         if gname != last_group:
             if last_group is not None:
-                y -= pitch * 0.3
-            room(2)
-            c.setFillColorRGB(0.35, 0.35, 0.35)
-            c.setFont(fn, small)
-            c.drawString(m, y, safe_text(gname).upper()[:int((ox - m) / (small * 0.55))])
-            y -= pitch * 0.85
+                if S["picklist_page_per_group"]:
+                    c.showPage()
+                    page += 1
+                    head(page)
+                else:
+                    y -= pitch * 0.6
+            if S["picklist_group_titles"]:
+                room(2)
+                c.setFillColorRGB(0, 0, 0)
+                c.setFont(font_bold(), mid + 1.5)
+                c.drawString(m, y, safe_text(gname)[:int((ox - m) / ((mid + 1.5) * 0.55))])
+                c.setLineWidth(0.7)
+                c.line(m, y - 3, ox, y - 3)
+                c.setLineWidth(1)
+                y -= pitch
             last_group = gname
         room()
         c.setFillColorRGB(0, 0, 0)
@@ -520,7 +584,7 @@ def process(src, a, cfg):
     for o in problems:
         print(f"  {RED}- order {o}: no items found on the slip - label says '{CHECK_TEXT}'{OFF}")
     for o in titled:
-        print(f"  {YELLOW}- order {o}: no SKU on slip - stamped part of the title instead (~~){OFF}")
+        print(f"  {YELLOW}- order {o}: no SKU on slip - stamped {'part of the title' if S['title_fallback'] else CHECK_TEXT} instead (~~){OFF}")
     for o in overflow:
         print(f"  {YELLOW}- order {o}: too many SKUs to fit neatly - check the label{OFF}")
     for n in notes:
@@ -533,11 +597,12 @@ def process(src, a, cfg):
     out_dir = Path(a.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     out = Path(a.out) if a.out else unique_path(out_dir / f"{src.stem}_sku.pdf")
-    for pg in picklist_pages(rows, unknown, "Pick list", cfg["picklist_size"]):
-        writer.add_page(pg)                      # pick list = last page(s) of the same PDF
+    if a.picklist:
+        for pg in picklist_pages(rows, unknown, "Pick list", cfg["picklist_size"]):
+            writer.add_page(pg)                  # pick list = last page(s) of the same PDF
     with open(out, "wb") as f:
         writer.write(f)
-    print(f"  -> {out}  ({total} labels + pick list as the last page)")
+    print(f"  -> {out}  ({total} labels" + (" + pick list as the last page)" if a.picklist else ")"))
     if a.preview:
         png = preview_png(out, busiest[1], out.with_suffix(".png"))
         if png:
@@ -613,9 +678,10 @@ def watch(a, cfg, folder, done_dir):
                 if out:
                     if not a.no_open:
                         open_file(out)
-                    archive(p, done_dir)   # stays in `ignore` either way, so it is never processed twice
+                    if cfg["move_originals"]:
+                        archive(p, done_dir)   # stays in `ignore` either way, so it is never processed twice
                     print(f"\n{BOLD}Watching again...{OFF}")
-            time.sleep(2)
+            time.sleep(max(1, float(cfg["watch_seconds"])))
     except KeyboardInterrupt:
         print("\nstopped")
 
@@ -635,8 +701,13 @@ def main():
     ap.add_argument("--watch", action="store_true", help="keep running and process new downloads")
     ap.add_argument("--move", action="store_true", help="move processed originals to done\\ (automatic for Downloads/watch)")
     ap.add_argument("--no-open", action="store_true", help="don't open the result")
+    ap.add_argument("--no-picklist", action="store_true", help="leave the pick list page out")
     ap.add_argument("--downloads", help="folder to look in (default: your Downloads)")
     a = ap.parse_args()
+    a.strip = a.strip or bool(cfg["strip_typed_text"])        # command-line flags add to settings.json
+    a.sort = a.sort and bool(cfg["sort_labels"])
+    a.no_open = a.no_open or not cfg["open_after"]
+    a.picklist = cfg["picklist"] and not a.no_picklist
     a.out_dir = resolve_dir(cfg["out_dir"])
     folder = Path(a.downloads or cfg["downloads"] or downloads_folder())
     done_dir = resolve_dir(cfg["done_dir"])
@@ -669,7 +740,7 @@ def main():
             continue
         if out:
             last = out
-            if (auto or a.move) and not a.check:
+            if ((auto and cfg["move_originals"]) or a.move) and not a.check:
                 archive(f, done_dir)
     if last and not a.no_open:
         open_file(last)

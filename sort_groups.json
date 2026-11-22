@@ -16,6 +16,7 @@
     // This group prints AFTER the "Other" group above, even though "Other" collects everything
     // not listed. Reason: the SKUs named here (BW, honey, jars) are matched to THIS group first,
     // so "Other" only ever gets the leftovers. Result: leftovers first, then these at the very end.
-    {"name": "Beeswax and honey (at the end)", "match": ["*BW*", "* h", "*jar"]}
+    {"name": "Beeswax and honey (at the end)", "match": ["*BW*", "* h", "*jar"]},
+    {"name": "Bruno misc", "match": ["*0c1*", "*randomstuff", "**tepe*"]}
   ]
 }
