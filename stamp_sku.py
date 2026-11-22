@@ -48,7 +48,7 @@ DEFAULTS = {
     "x": 40.0, "y": 378.0, "size": 11.0, "colour": [0, 0, 0.85],
     "sort_labels": True,
     "title_fallback": True, "title_length": 28,
-    "picklist": True, "picklist_size": "4x6", "picklist_group_titles": True, "picklist_page_per_group": False,
+    "picklist": True, "picklist_size": "4x6", "picklist_columns": ["qty", "sku", "orders"], "picklist_group_titles": True, "picklist_page_per_group": False,
     "open_after": True, "move_originals": True, "strip_typed_text": False,
     "out_dir": "Labels", "done_dir": "done", "downloads": None, "pattern": "shipping*.pdf", "watch_seconds": 2,
 }
@@ -120,6 +120,11 @@ def load_settings():
         except Exception as e:
             print(f"{RED}settings.json ignored (fix the file): {e}{OFF}")
             FILE_ERRORS.append(f"settings.json is broken ({e}) - default settings used")
+    bad = [c_ for c_ in (S["picklist_columns"] if isinstance(S["picklist_columns"], list) else ["?"])
+           if str(c_).strip().lower() not in ("qty", "sku", "orders")]
+    if bad or not isinstance(S["picklist_columns"], list):
+        print(f"{YELLOW}settings.json: picklist_columns may only contain \"qty\", \"sku\", \"orders\" (got {bad or S['picklist_columns']}){OFF}")
+        FILE_ERRORS.append("settings.json: picklist_columns has an unknown column name - it was ignored")
     return S
 
 
@@ -416,6 +421,18 @@ def picklist(orders, groups):
     return rows, unknown
 
 
+def pick_columns():
+    """Pick list columns from settings: order = left to right, leave one out to hide it. SKU always shows."""
+    cols = []
+    for c_ in S["picklist_columns"] if isinstance(S["picklist_columns"], list) else []:
+        c_ = str(c_).strip().lower()
+        if c_ in ("qty", "sku", "orders") and c_ not in cols:
+            cols.append(c_)
+    if "sku" not in cols:
+        cols.append("sku")
+    return cols
+
+
 def picklist_pages(rows, unknown, title, size="4x6"):
     """Pick list as PDF page(s) (4x6in so it prints on the label printer) -> list of pypdf pages."""
     a4 = str(size).lower() == "a4"
@@ -423,7 +440,16 @@ def picklist_pages(rows, unknown, title, size="4x6"):
     m = 40 if a4 else 18                       # side margin
     big, mid, small = (12, 10, 9) if a4 else (9, 7.5, 7)
     pitch = 18 if a4 else 12.5
-    qx, ox = W - m - (80 if a4 else 46), W - m  # right edges of the Qty and Orders columns
+    ox = W - m                                   # right edge of the table
+    cols = pick_columns()
+    widths = {"qty": 55 if a4 else 30, "orders": 60 if a4 else 38}
+    widths["sku"] = (ox - m) - sum(widths[c_] for c_ in cols if c_ != "sku")
+    left, x0 = {}, m
+    for c_ in cols:                              # columns run left to right in the order of picklist_columns
+        left[c_] = x0
+        x0 += widths[c_]
+    sku_x = left["sku"] + 4
+    max_chars = int((widths["sku"] - 8) / (big * 0.5))
     bottom = 40 if a4 else 26
     fn = font_name()
     buf = io.BytesIO()
@@ -439,14 +465,18 @@ def picklist_pages(rows, unknown, title, size="4x6"):
         c.drawString(m, H - (54 if a4 else 35), datetime.now().strftime("%d %b %Y %H:%M") + f"   page {page}")
         y = H - (80 if a4 else 54)
         c.setFont(fn, mid)
-        c.drawString(m, y, "SKU")
-        c.drawRightString(qx, y, "Qty")
-        c.drawRightString(ox, y, "Orders")
+        for c_ in cols:
+            if c_ == "sku":
+                c.drawString(sku_x, y, "SKU")
+            else:
+                c.drawRightString(left[c_] + widths[c_] - 4, y, "Qty" if c_ == "qty" else "Orders")
         c.line(m, y - 4, ox, y - 4)
         y -= 4 + pitch
 
     page = 1
     head(page)
+
+    cur = [None]    # group whose rows are being drawn (so a page break can say "(continued)")
 
     def room(n=1):
         nonlocal y, page
@@ -454,11 +484,19 @@ def picklist_pages(rows, unknown, title, size="4x6"):
             c.showPage()
             page += 1
             head(page)
+            if cur[0] is not None:
+                c.setFillColorRGB(0, 0, 0)
+                c.setFont(font_bold(), mid + 1.5)
+                c.drawString(m, y, safe_text(cur[0] + " (continued)")[:int((ox - m) / ((mid + 1.5) * 0.55))])
+                c.setLineWidth(0.7)
+                c.line(m, y - 3, ox, y - 3)
+                c.setLineWidth(1)
+                y -= pitch
 
-    max_chars = int((qx - m - 20) / (big * 0.5))
     last_group = None
     for sku, q, n, gname in rows:
         if gname != last_group:
+            cur[0] = None
             if last_group is not None:
                 if S["picklist_page_per_group"]:
                     c.showPage()
@@ -475,21 +513,28 @@ def picklist_pages(rows, unknown, title, size="4x6"):
                 c.line(m, y - 3, ox, y - 3)
                 c.setLineWidth(1)
                 y -= pitch
+                cur[0] = gname
             last_group = gname
         room()
         c.setFillColorRGB(0, 0, 0)
         c.setFont(fn, big)
-        c.drawString(m + 4, y, safe_text(sku)[:max_chars])
-        c.drawRightString(qx, y, str(q))
-        c.setFont(fn, mid)
-        c.drawRightString(ox, y, str(n))
+        c.drawString(sku_x, y, safe_text(sku)[:max_chars])
+        if "qty" in cols:
+            c.drawRightString(left["qty"] + widths["qty"] - 4, y, str(q))
+        if "orders" in cols:
+            c.setFont(fn, mid)
+            c.drawRightString(left["orders"] + widths["orders"] - 4, y, str(n))
         y -= pitch
     y -= pitch * 0.4
     room(2)
     c.line(m, y + pitch - 4, ox, y + pitch - 4)
     c.setFont(fn, big)
-    c.drawString(m, y, "Total items")
-    c.drawRightString(qx, y, str(sum(r[1] for r in rows)))
+    total_items = sum(r[1] for r in rows)
+    if "qty" in cols:
+        c.drawString(sku_x, y, "Total items")
+        c.drawRightString(left["qty"] + widths["qty"] - 4, y, str(total_items))
+    else:
+        c.drawString(sku_x, y, f"Total items: {total_items}")
     y -= pitch * 1.5
     if unknown:
         room(2)

@@ -105,6 +105,7 @@ All the options live in **`settings.json`**: open it in Notepad, change a value,
 | `title_length` | 28 | Characters of the title to stamp (a `[bracketed option]` is used in full) |
 | `picklist` | true | `false` = no pick list page |
 | `picklist_size` | `4x6` | `4x6` (label printer) or `a4` |
+| `picklist_columns` | `["qty", "sku", "orders"]` | Pick list columns **left to right**; leave a name out to hide that column. Names: `"qty"`, `"sku"`, `"orders"` (SKU always shows). `["sku", "qty"]` puts the SKU first and hides Orders |
 | `picklist_group_titles` | true | Show each group's name (from `sort_groups.json`) as a bold title with a line under it |
 | `picklist_page_per_group` | false | `true` = start every group on a new page |
 | `open_after` | true | Open the finished PDF automatically |

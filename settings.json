@@ -19,6 +19,7 @@
   // ---- Pick list (the last page of the labels PDF)
   "picklist": true,                   // false = no pick list page
   "picklist_size": "4x6",             // "4x6" (label printer) or "a4"
+  "picklist_columns": ["qty", "sku", "orders"],   // columns left to right; leave one out to hide it. Names: "qty", "sku", "orders" (SKU always shows)
   "picklist_group_titles": true,      // show each group's name as a title (from sort_groups.json)
   "picklist_page_per_group": false,   // true = start every group on a new page
 
