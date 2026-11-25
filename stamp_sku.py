@@ -50,12 +50,14 @@ DEFAULTS = {
     "sort_labels": True,
     "title_fallback": True, "title_length": 28,
     "picklist": True, "picklist_size": "4x6", "picklist_columns": ["qty", "sku", "orders"], "picklist_group_titles": True, "picklist_page_per_group": False,
+    "picklist_priority_flag": True, "priority_words": ["1st class", "first class", "special delivery"],
     "repeat_star": True, "repeat_double_star_from": 15,
     "gift_mark": True, "gift_text": "GIFT MESSAGE",
     "layout_alarm_percent": 25, "open_after": True, "move_originals": True, "strip_typed_text": False,
     "out_dir": "Labels", "done_dir": "done", "downloads": None, "pattern": "shipping*.pdf", "watch_seconds": 2,
 }
 FILE_ERRORS = []     # problems found while reading settings.json / sort_groups.json (shown again in the summary)
+GROUP_OPTS = {"priority_first": True}   # options from the top of sort_groups.json; set by load_groups()
 S = dict(DEFAULTS)     # the live settings (settings.json merged over DEFAULTS); set by load_settings()
 
 
@@ -197,6 +199,24 @@ def is_slip(text):
 REPEAT_RE = re.compile(r"REPEAT\s+CUSTOMER(?:\s*\(\s*Order\s*#?\s*(\d+)\s*\))?", re.I)
 
 
+PRIORITY_BIG_NUMBER = 30   # points: Shopify's Royal Mail labels print the service as a huge "24" or "48" beside "Tracked"
+
+
+def label_priority(page, text):
+    """The postage service that must go first, read from a LABEL page: 'Tracked 24', or the matching phrase from
+    settings.json priority_words ("1st class", ...). '' = ordinary postage (Tracked 48, standard...)."""
+    low = text.lower()
+    if "tracked" in low:
+        for w in page.extract_words(extra_attrs=["size"]):
+            if w["text"] == "24" and w["size"] >= PRIORITY_BIG_NUMBER:
+                return "Tracked 24"
+    words = S["priority_words"] if isinstance(S["priority_words"], list) else []
+    for word in words:
+        if str(word).strip() and str(word).strip().lower() in low:
+            return str(word).strip()
+    return ""
+
+
 def order_no(text):
     m = re.search(r"Order\s+#?(\d+)", REPEAT_RE.sub("", text))   # not the "(Order #2)" of the repeat-customer line
     return m.group(1) if m else "?"
@@ -329,7 +349,8 @@ def parse_pdf(src):
                     continue
                 slips.append((len(orders) - 1, order_no(t), *body_lines(pg), repeat_of(t), has_gift_message(t)))
             else:
-                orders.append({"page": i, "order": "?", "items": [], "slip": False, "repeat": None, "gift": False})
+                orders.append({"page": i, "order": "?", "items": [], "slip": False, "repeat": None, "gift": False,
+                               "priority": label_priority(pg, t)})
         lines_all = [l for s in slips for l in s[2]]
         colmax = max([l["x1"] for l in lines_all] + [SLIP_COLUMN_EDGE])   # floor: a batch with no wrapped title still needs a sane edge
         for oi, num, lines, marks, rep_n, gift in slips:
@@ -394,6 +415,7 @@ def load_groups():
     A group whose match list is just "*" is the 'everything else' group, wherever it sits in the list."""
     f = HERE / "sort_groups.json"
     FILE_ERRORS[:] = [e for e in FILE_ERRORS if not e.startswith("sort_groups.json")]
+    GROUP_OPTS["priority_first"] = True
     if not f.exists():
         return []
     try:
@@ -402,6 +424,12 @@ def load_groups():
         print(f"{RED}sort_groups.json ignored (fix the file): {e}{OFF}")
         FILE_ERRORS.append(f"sort_groups.json is broken ({e}) - labels sorted by plain SKU order instead")
         return []
+    GROUP_OPTS["priority_first"] = True
+    pf = data.get("priority_first", True)
+    if isinstance(pf, bool):
+        GROUP_OPTS["priority_first"] = pf
+    else:
+        FILE_ERRORS.append('sort_groups.json: "priority_first" must be true or false (without quotes) - left on')
     groups = []
     for g in data.get("groups", []):
         raw = [str(m).strip().lower() for m in g.get("match", [])]
@@ -433,19 +461,24 @@ def order_group(o, groups):
     return max((group_of(s, groups)[0] for _, s, _, _ in o["items"]), default=len(groups))
 
 
+def goes_first(o):
+    """True for a priority-postage order (Tracked 24, 1st class...) while "priority_first" is on in sort_groups.json."""
+    return bool(GROUP_OPTS["priority_first"] and o.get("priority"))
+
+
 def sort_key(o, groups):
-    """Orders to check first, then by group (order of sort_groups.json), then single-item orders
-    by pattern order and SKU, then multi-item orders."""
+    """Orders to check first, then priority postage (if switched on), then by group (order of sort_groups.json),
+    then single-item orders by pattern order and SKU, then multi-item orders."""
     items = [(group_of(s, groups)[1], natural(s)) for _, s, _, _ in o["items"]]
     bad = (not o["items"]) or any(g for _, _, _, g in o["items"])
-    return (0 if bad else 1, order_group(o, groups), 0 if len(items) <= 1 else 1, items, natural(o["order"]))
+    return (0 if bad else 1, 0 if goes_first(o) else 1, order_group(o, groups), 0 if len(items) <= 1 else 1, items, natural(o["order"]))
 
 
 # --------------------------------------------------------------------------- pick list
 
 def picklist(orders, groups):
-    """-> (rows [(sku, total_qty, n_orders, group_name)] in group order, unknown [(qty, title, order)])"""
-    tot, cnt, unknown = {}, {}, []
+    """-> (rows [(sku, total_qty, n_orders, group_name, n_priority_orders)] in group order, unknown [(qty, title, order)])"""
+    tot, cnt, pri, unknown = {}, {}, {}, []
     for o in orders:
         if not o["items"]:
             unknown.append((0, "no items found on the slip", o["order"]))
@@ -453,10 +486,12 @@ def picklist(orders, groups):
             key = (s, guessed)
             tot[key] = tot.get(key, 0) + q
             cnt[key] = cnt.get(key, 0) + 1
+            if o.get("priority"):
+                pri[key] = pri.get(key, 0) + 1
     def k(key):
         gi, pi = group_of(key[0], groups)
         return (gi, pi, natural(key[0]))
-    rows = [((s + ("  (from title)" if S["title_fallback"] else "  (no SKU)") if g else s), tot[(s, g)], cnt[(s, g)], group_name(group_of(s, groups)[0], groups))
+    rows = [((s + ("  (from title)" if S["title_fallback"] else "  (no SKU)") if g else s), tot[(s, g)], cnt[(s, g)], group_name(group_of(s, groups)[0], groups), pri.get((s, g), 0))
             for (s, g) in sorted(tot, key=k)]
     return rows, unknown
 
@@ -473,9 +508,10 @@ def pick_columns():
     return cols
 
 
-def picklist_pages(rows, unknown, title, size="4x6", total_orders=None):
+def picklist_pages(rows, unknown, title, size="4x6", total_orders=None, priority_orders=0):
     """Pick list as PDF page(s) (4x6in so it prints on the label printer) -> list of pypdf pages.
-    total_orders: how many orders (labels) are in the batch; shown bold at the end, under the Orders column."""
+    total_orders: how many orders (labels) are in the batch; shown bold at the end, under the Orders column.
+    priority_orders: how many of them are priority postage; a red P<n> beside a SKU says n of its orders are."""
     a4 = str(size).lower() == "a4"
     W, H = (595.0, 842.0) if a4 else (288.0, 432.0)
     m = 40 if a4 else 18                       # side margin
@@ -535,7 +571,10 @@ def picklist_pages(rows, unknown, title, size="4x6", total_orders=None):
                 y -= pitch
 
     last_group = None
-    for sku, q, n, gname in rows:
+    flag_on = bool(S["picklist_priority_flag"])
+    for row in rows:
+        sku, q, n, gname = row[:4]
+        pr = row[4] if len(row) > 4 else 0
         if gname != last_group:
             cur[0] = None
             if last_group is not None:
@@ -559,7 +598,14 @@ def picklist_pages(rows, unknown, title, size="4x6", total_orders=None):
         room()
         c.setFillColorRGB(0, 0, 0)
         c.setFont(fn, big)
-        c.drawString(sku_x, y, safe_text(sku)[:max_chars])
+        flagged = flag_on and bool(pr)
+        c.drawString(sku_x, y, safe_text(sku)[:max_chars - (4 if flagged else 0)])
+        if flagged:                                  # red P<n>: n of this SKU's orders are priority postage
+            c.setFillColorRGB(0.85, 0, 0)
+            c.setFont(font_bold(), mid)
+            c.drawRightString(left["sku"] + widths["sku"] - 4, y, f"P{pr}")
+            c.setFillColorRGB(0, 0, 0)
+            c.setFont(fn, big)
         if "qty" in cols:
             c.drawRightString(left["qty"] + widths["qty"] - 4, y, str(q))
         if "orders" in cols:
@@ -581,6 +627,18 @@ def picklist_pages(rows, unknown, title, size="4x6", total_orders=None):
     c.setFont(bold, tot)
     c.drawString(label_x, y, "Total orders")
     c.drawRightString(num_right, y, str(total))
+    if priority_orders and flag_on:
+        room(3)
+        y -= pitch * 1.2
+        c.setFillColorRGB(0.85, 0, 0)
+        c.setFont(bold, tot)
+        c.drawString(num_right - pdfmetrics.stringWidth(str(priority_orders), bold, tot) - gap
+                     - pdfmetrics.stringWidth("PRIORITY orders", bold, tot), y, "PRIORITY orders")
+        c.drawRightString(num_right, y, str(priority_orders))
+        y -= pitch * 0.9
+        c.setFont(fn, small)
+        c.drawRightString(ox, y, "P2 beside a SKU = 2 of its orders are priority postage")
+        c.setFillColorRGB(0, 0, 0)
     y -= pitch * 1.5
     if unknown:
         room(2)
@@ -683,16 +741,18 @@ def process(src, a, cfg):
         elif guessed:
             titled.append(o["order"])
         mark = f"{RED}!!{OFF}" if bad else (f"{YELLOW}~~{OFF}" if guessed else f"{GREEN}ok{OFF}")
-        if groups and a.sort and not bad:
-            gn = group_name(order_group(o, groups), groups)
-            if gn != last_group:
+        if a.sort and not bad:
+            gn = ("PRIORITY POSTAGE (Tracked 24 / 1st class), then by group" if goes_first(o)
+                  else (group_name(order_group(o, groups), groups) if groups else None))
+            if gn and gn != last_group:
                 print(f"  {DIM}--- {gn} ---{OFF}")
                 last_group = gn
         star = repeat_mark(o["repeat"])
         if star and text:
             text[0] += " " + star                          # same habit as writing * by hand
         gift = bool(o.get("gift")) and bool(S["gift_mark"])
-        print(f"  {mark} Order {o['order']:>11}: {' | '.join(text) or '-'}" + (f"  {YELLOW}{BOLD}[{S['gift_text']}]{OFF}" if gift else ""))
+        print(f"  {mark} Order {o['order']:>11}: {' | '.join(text) or '-'}" + (f"  {YELLOW}{BOLD}[{S['gift_text']}]{OFF}" if gift else "")
+              + (f"  {RED}{BOLD}[PRIORITY: {o['priority']}]{OFF}" if o.get("priority") else ""))
         label = writer.add_page(reader.pages[o["page"]])   # attach first, then edit (newer pypdf requires this)
         if a.strip and "/Annots" in label:
             del label["/Annots"]                            # remove text typed by hand
@@ -720,6 +780,12 @@ def process(src, a, cfg):
     print(f"\n  {BOLD}Summary{OFF}: {total} labels, {sum(r[1] for r in rows)} items, {len(rows)} different SKUs")
     if repeats:
         print(f"  {repeats} repeat customer{'s' if repeats != 1 else ''} (marked with * on the label)")
+    n_priority = sum(1 for o in orders if o.get("priority"))
+    if n_priority:
+        kinds = ", ".join(sorted({o["priority"] for o in orders if o.get("priority")}))
+        where = ("printed first" if GROUP_OPTS["priority_first"] and a.sort
+                 else 'not moved: "priority_first" is off in sort_groups.json (or sorting is off)')
+        print(f"  {RED}{BOLD}{n_priority} priority postage order{'s' if n_priority != 1 else ''} ({kinds}){OFF}: {where}")
     gifts = [o["order"] for o in orders if o.get("gift")] if S["gift_mark"] else []
     if gifts:
         print(f"  {YELLOW}{BOLD}{len(gifts)} order{'s' if len(gifts) != 1 else ''} with a gift message{OFF}{YELLOW}: print "
@@ -766,7 +832,7 @@ def process(src, a, cfg):
     out_dir.mkdir(parents=True, exist_ok=True)
     out = Path(a.out) if a.out else unique_path(out_dir / f"{src.stem}_sku.pdf")
     if a.picklist:
-        for pg in picklist_pages(rows, unknown, "Pick list", cfg["picklist_size"], total):
+        for pg in picklist_pages(rows, unknown, "Pick list", cfg["picklist_size"], total, n_priority):
             writer.add_page(pg)                  # pick list = last page(s) of the same PDF
     with open(out, "wb") as f:
         writer.write(f)

@@ -137,6 +137,93 @@ class Grouping(unittest.TestCase):
         self.assertFalse(s.glob_to_regex("a.c").match("abc"))              # other characters stay literal
 
 
+class PriorityPostage(unittest.TestCase):
+    """Tracked 24 (a huge "24" on the label) and 1st class print first; sort_groups.json can switch it off."""
+
+    def setUp(self):
+        self.real_here = s.HERE
+        s.HERE = Path(__file__).resolve().parent.parent / "defaults"
+        s.load_settings()
+        self.groups = s.load_groups()
+
+    def tearDown(self):
+        s.HERE = self.real_here
+        s.load_settings()
+        s.load_groups()
+
+    def label_page(self, draw):
+        import pdfplumber
+        with tempfile.TemporaryDirectory() as d:
+            f = Path(d) / "label.pdf"
+            c = canvas.Canvas(str(f), pagesize=(288, 432))
+            draw(c)
+            c.save()
+            with pdfplumber.open(str(f)) as pl:
+                pg = pl.pages[0]
+                return s.label_priority(pg, pg.extract_text() or "")
+
+    def test_tracked_24_is_priority_tracked_48_is_not(self):
+        def tracked(n):
+            def draw(c):
+                c.setFont("Helvetica-Bold", 49)
+                c.drawString(129, 380, n)
+                c.setFont("Helvetica", 25)
+                c.drawString(20, 340, "Tracked")
+            return draw
+        self.assertEqual(self.label_page(tracked("24")), "Tracked 24")
+        self.assertEqual(self.label_page(tracked("48")), "")
+
+    def test_a_small_24_elsewhere_does_not_count(self):
+        def draw(c):
+            c.setFont("Helvetica", 25)
+            c.drawString(20, 340, "Tracked")
+            c.setFont("Helvetica", 9)
+            c.drawString(20, 300, "24")
+        self.assertEqual(self.label_page(draw), "")
+
+    def test_first_class_wording_from_settings(self):
+        def draw(c):
+            c.setFont("Helvetica", 12)
+            c.drawString(20, 340, "Royal Mail 1st Class")
+        self.assertEqual(self.label_page(draw), "1st class")
+
+    def order(self, no, sku, priority=""):
+        return {"page": 0, "order": no, "items": [(1, sku, "", False)], "slip": True, "repeat": None, "gift": False, "priority": priority}
+
+    def test_priority_orders_sort_first_then_by_group(self):
+        orders = [self.order("1", "4 dip 2cm"), self.order("2", "12 TL", "Tracked 24"),
+                  self.order("3", "2 dip 2cm", "1st class"), self.order("4", "6 TL")]
+        orders.sort(key=lambda o: s.sort_key(o, self.groups))
+        self.assertEqual([o["order"] for o in orders], ["3", "2", "1", "4"])      # priority (by group), then the rest (by group)
+
+    def test_option_in_sort_groups_switches_it_off(self):
+        with tempfile.TemporaryDirectory() as d:
+            (Path(d) / "sort_groups.json").write_text('{"priority_first": false, "groups": [{"name": "A", "match": ["* dip 2cm"]}, {"name": "T", "match": ["* TL"]}]}')
+            s.HERE = Path(d)
+            groups = s.load_groups()
+            self.assertFalse(s.GROUP_OPTS["priority_first"])
+            orders = [self.order("1", "4 dip 2cm"), self.order("2", "12 TL", "Tracked 24")]
+            orders.sort(key=lambda o: s.sort_key(o, groups))
+            self.assertEqual([o["order"] for o in orders], ["1", "2"])            # plain group order again
+            (Path(d) / "sort_groups.json").write_text('{"priority_first": "no", "groups": []}')
+            s.load_groups()
+            self.assertTrue(any("priority_first" in e for e in s.FILE_ERRORS))    # a typo is reported, not silently ignored
+            self.assertTrue(s.GROUP_OPTS["priority_first"])
+
+    def test_problem_orders_still_come_before_priority(self):
+        bad = {"page": 0, "order": "9", "items": [], "slip": True, "repeat": None, "gift": False, "priority": ""}
+        orders = [self.order("2", "12 TL", "Tracked 24"), bad]
+        orders.sort(key=lambda o: s.sort_key(o, self.groups))
+        self.assertEqual(orders[0]["order"], "9")
+
+    def test_picklist_counts_priority_orders_per_sku(self):
+        orders = [self.order("1", "4 dip 2cm", "Tracked 24"), self.order("2", "4 dip 2cm"), self.order("3", "12 TL")]
+        rows, _ = s.picklist(orders, self.groups)
+        by = {r[0]: r for r in rows}
+        self.assertEqual(by["4 dip 2cm"][4], 1)
+        self.assertEqual(by["12 TL"][4], 0)
+
+
 class Helpers(unittest.TestCase):
     def setUp(self):
         s.load_settings()
@@ -293,6 +380,31 @@ class PickListLayout(unittest.TestCase):
         orders_hdr = [w for w in words if w["text"] == "Orders" and w["top"] < 80][0]
         self.assertAlmostEqual(total["x1"], orders_hdr["x1"], delta=2)      # number sits under the Orders column
         self.assertGreater(total["x0"] - [w for w in words if w["text"] == "orders" and w["top"] > 80][-1]["x1"], 5)   # gap after the words
+
+    def test_priority_flag_and_count_on_the_pick_list(self):
+        import pdfplumber
+        from pypdf import PdfWriter
+        w = PdfWriter()
+        rows = [("2 dip 2cm", 3, 2, "Dipped 2cm", 1), ("6 VN", 1, 1, "Votive natural", 0)]
+        for p in s.picklist_pages(rows, [], "Pick list", "4x6", 3, 1):
+            w.add_page(p)
+        buf = io.BytesIO()
+        w.write(buf)
+        buf.seek(0)
+        with pdfplumber.open(buf) as pl:
+            text = pl.pages[0].extract_text()
+        self.assertIn("P1", text)                       # beside the SKU that has a priority order
+        self.assertIn("PRIORITY orders", text)
+        self.assertEqual(text.count("P1"), 1)           # not beside the other SKU
+        s.S["picklist_priority_flag"] = False           # the setting turns the flag off
+        w = PdfWriter()
+        for p in s.picklist_pages(rows, [], "Pick list", "4x6", 3, 1):
+            w.add_page(p)
+        buf = io.BytesIO()
+        w.write(buf)
+        buf.seek(0)
+        with pdfplumber.open(buf) as pl:
+            self.assertNotIn("PRIORITY", pl.pages[0].extract_text())
 
     def test_group_title_is_in_the_sku_column(self):
         words, _ = self.words([("2 dip 2cm", 1, 1, "Dipped 2cm")], 1)

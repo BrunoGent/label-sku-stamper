@@ -22,6 +22,10 @@
   "picklist_columns": ["qty", "sku", "orders"],   // columns left to right; leave one out to hide it. Names: "qty", "sku", "orders" (SKU always shows)
   "picklist_group_titles": true,      // show each group's name as a title (from sort_groups.json)
   "picklist_page_per_group": false,   // true = start every group on a new page
+  "picklist_priority_flag": true,     // true = red P<n> beside a SKU when n of its orders are priority postage, plus a PRIORITY orders count at the end. false = off
+
+  // ---- Priority postage (whether it prints FIRST is "priority_first" at the top of sort_groups.json)
+  "priority_words": ["1st class", "first class", "special delivery"],   // a label containing one of these phrases is priority. Tracked 24 is found from the big "24" on the label
 
   // ---- Repeat customers (the slip says "REPEAT CUSTOMER (Order #N)")
   "repeat_star": true,             // true = put * after the first SKU of a repeat customer's label. false = off

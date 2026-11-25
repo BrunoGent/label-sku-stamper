@@ -31,8 +31,8 @@ For every order in the Shopify PDF it:
 2. Reads the items on the slip and works out each SKU and quantity. A quantity above 1 is written as `3 x kg h`; a quantity of 1 is just the SKU.
 3. Stamps those lines in blue at the bottom of the label (below the address area, clear of the barcode). If the slip says **REPEAT CUSTOMER**, a `*` is added after the first SKU (`**` for very frequent customers, see [Settings](#settings)).
 4. Drops the packing slips, so the output contains labels only.
-5. Sorts the labels into the **groups** you define in `sort_groups.json` (for example all 2cm dipped candles together, then tealights, with honey and beeswax last), and by number within each group. Orders that need checking come first.
-6. Adds a **pick list** page at the end: the total quantity of each SKU in the batch, for collecting stock. Group titles sit in the SKU column, and the last line is a bold **Total orders** (the number of orders, i.e. labels, in the batch) with its number under the Orders column.
+5. Sorts the labels into the **groups** you define in `sort_groups.json` (for example all 2cm dipped candles together, then tealights, with honey and beeswax last), and by number within each group. Orders that need checking come first, then **priority postage** (a **Tracked 24** or **1st class** label) before everything else, unless you switch that off (see [Priority postage](#priority-postage-tracked-24-and-1st-class-first)).
+6. Adds a **pick list** page at the end: the total quantity of each SKU in the batch, for collecting stock. Group titles sit in the SKU column, and the last line is a bold **Total orders** (the number of orders, i.e. labels, in the batch) with its number under the Orders column. Priority orders are flagged in red (a `P1` beside a SKU, and a **PRIORITY orders** count under the total).
 7. Saves one PDF in the `Labels` folder and opens it.
 
 ## Quick start (everyday use)
@@ -114,6 +114,8 @@ All the options live in **`settings.json`**: open it in Notepad, change a value,
 | `gift_text` | `GIFT MESSAGE` | The words stamped on a gift-message label |
 | `picklist_group_titles` | true | Show each group's name (from `sort_groups.json`) as a bold title with a line under it |
 | `picklist_page_per_group` | false | `true` = start every group on a new page |
+| `picklist_priority_flag` | true | Pick list: a red `P<n>` beside a SKU when `n` of its orders are priority postage, and a red **PRIORITY orders** count under Total orders. `false` = off |
+| `priority_words` | `["1st class", "first class", "special delivery"]` | A label whose text contains one of these phrases is priority postage. (Tracked 24 is not in this list: it is found from the big `24` on the label.) |
 | `layout_alarm_percent` | 25 | Warn loudly if this percentage (or more) of the orders have no SKU: Shopify may have changed the slip layout. `0` = off |
 | `open_after` | true | Open the finished PDF automatically |
 | `move_originals` | true | Move the original download to `done\` (when picked from Downloads, or in watch mode) |
@@ -130,6 +132,16 @@ All the options live in **`settings.json`**: open it in Notepad, change a value,
 A typo in a setting name is reported in the window. If the file itself is broken (for example a missing comma) the program says so with the line number and uses its built-in defaults. Command-line options (below) add to or override these for one run.
 
 To tune the position: run with `--preview`, look at the PNG it opens, change `x`, `y` or `size`, and repeat.
+
+## Priority postage (Tracked 24 and 1st class first)
+
+Orders posted **Tracked 24** or **1st class** print **first**, ahead of every group, so they can be packed and posted first. Inside that block they keep the normal group order. Orders that need checking (`!!`) still come before even these.
+
+- **How the program knows.** Shopify's Royal Mail label prints the service as a huge number beside the word *Tracked*: a big `24` means Tracked 24 (priority), a big `48` means Tracked 48 (normal). For 1st class (and similar) it looks for the phrases in `priority_words` in `settings.json` (`1st class`, `first class`, `special delivery`). Edit that list if your labels say something else.
+- **Switch it off or on:** the line `"priority_first": true,` at the top of `sort_groups.json`. `false` = priority orders sit in their normal group, as before. Writing it as text (`"false"`) is reported as a mistake.
+- **In the window:** each priority order ends with a red `[PRIORITY: Tracked 24]`, the block has its own heading, and the summary counts them (it also says when the option is off, so a count with "not moved" is not a mistake).
+- **On the pick list (last page):** a red `P<n>` beside each SKU that has `n` priority orders, and **PRIORITY orders** with the count under **Total orders**. Switch off with `"picklist_priority_flag": false` in `settings.json`; that setting only affects the pick list, not the order of the labels.
+- **Check it works for 1st class:** no 1st class label has been checked yet. After the first one, confirm the window shows `[PRIORITY: 1st class]` for it; if not, add the wording that is printed on that label to `priority_words`.
 
 ## Choosing the label order (sort_groups.json)
 
@@ -220,7 +232,8 @@ Files given by name stay where they are unless `--move` is added.
 - **SKU rule.** The SKU is the last line of an item block, unless the line before it was a wrapped line of the title (meaning the last line is just the rest of the title and the item has no SKU).
 - **No SKU.** The `[bracketed option]` from the title is stamped, or the first ~28 characters of the title, and the order is flagged `~~`.
 - **Stamping.** The text is drawn onto a transparent page and merged on top of the label. It uses Arial if available, and shrinks or uses two columns if there are many lines.
-- **Sort.** Orders to check first, then by group (`sort_groups.json`), then single-item orders by pattern and number (`2 dip` before `12 dip`), then multi-item orders in that group.
+- **Sort.** Orders to check first, then priority postage (`priority_first`), then by group (`sort_groups.json`), then single-item orders by pattern and number (`2 dip` before `12 dip`), then multi-item orders in that group.
+- **Priority.** Read from the label page (not the slip): a word `24` at least 30 points tall on a page containing "Tracked", or a phrase from `priority_words`.
 - **Output.** Sorted labels, then the pick list pages, written to one PDF.
 
 ## Troubleshooting
@@ -248,6 +261,7 @@ Shipping PDFs contain customers' names and addresses. The repository's `.gitigno
 ## Limitations
 
 - Built around Shopify's 4x6 packing slip and the Royal Mail label layout seen so far (blank area at the bottom of the label). Other layouts need the position re-tuned.
+- Priority postage is read from Royal Mail's label layout (the big `24` beside "Tracked") and from the phrases in `priority_words`. If Shopify or Royal Mail change the label, the program silently treats orders as normal, so glance at the window's priority count against what you bought.
 - Items with no SKU are detected from how the title wraps; an unusual title can be misjudged. These cases show up as flagged orders, not as silently wrong SKUs.
 - Windows is the supported platform (`.bat` files). The Python program itself also runs elsewhere.
 

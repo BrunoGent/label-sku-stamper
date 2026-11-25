@@ -87,7 +87,7 @@ const doc = new Document({
       step([b("Open the label-sku-stamper folder "), t("(C:\\beemine-automations\\label-sku-stamper) and double-click "), b("run.bat"), t(". A black window opens and lists every order with its SKU(s). It uses the newest shipping file in Downloads by itself. To use a different file, drag that PDF onto run.bat instead.")]),
       step([b("Read the list in the window. "), t("The next section explains the colours. A yellow line at the end listing “SKUs not in a named sort group” just means some new SKUs need adding to the label order; tell Bruno.")]),
       step([b("The finished PDF opens by itself. "), t("Look through it. Each label should show a blue SKU at the bottom, clear of the barcode and the address. The last page is the pick list; its bold Total orders line says how many orders are in the batch.")]),
-      step([b("Print the whole PDF "), t("on the label printer (4x6in). Labels come out sorted so identical orders are together, and anything that needs checking comes first. The pick list comes out last. To print only the pick list, print only the last page.")]),
+      step([b("Print the whole PDF "), t("on the label printer (4x6in). Labels come out sorted so identical orders are together, priority postage (Tracked 24 or 1st class) comes first after anything that needs checking. The pick list comes out last. To print only the pick list, print only the last page.")]),
       step([b("Press any key "), t("to close the black window. Your download is moved to the “done” folder, so the next run will not use it again. Nothing is deleted.")]),
 
       h1("What the colours in the window mean"),
@@ -115,6 +115,7 @@ const doc = new Document({
 
       h1("Good to know"),
       bullet("The labels come out in groups, for example all 2cm dipped candles together, then tealights, with honey and beeswax last. Bruno can change the order in a small file called sort_groups.json."),
+      bullet("Parcels posted Tracked 24 or 1st class (priority postage) come out FIRST, so they can be packed and posted first. In the window each one ends with a red [PRIORITY: …], and on the pick list (last page) a red P1, P2 … beside a SKU says how many of its orders are priority, with a red PRIORITY orders count under Total orders. Bruno can switch this off in sort_groups.json."),
       bullet("A small * after the SKU on a label means a repeat customer (two ** means a very frequent one). It comes from the packing slip, so it is stamped automatically."),
       bullet("A last line GIFT MESSAGE on a label means the order has a gift message. Print it from Etsy and put it in the parcel. The window also lists those orders in yellow. A gift order with no message gets nothing."),
       bullet("Labels and downloads are kept in the “Labels” and “done” folders. Keep them; there is no need to delete anything."),
