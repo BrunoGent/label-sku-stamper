@@ -5,7 +5,8 @@ cd /d "%~dp0"
 call :pick
 %PY% stamp_sku.py %*
 echo.
-pause
+rem the Beemine Start menu does its own pause
+if not defined BEEMINE_LAUNCHER pause
 exit /b
 :pick
 rem use the first Python that actually has the needed packages
