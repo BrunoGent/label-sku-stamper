@@ -35,6 +35,11 @@
   "gift_mark": true,               // true = add a line to the label and list the orders in the summary. false = off
   "gift_text": "GIFT MESSAGE",     // the words stamped on the label
 
+  // ---- Orders with a note (the slip has a NOTES section, e.g. "2 dark green and 2 wine purple candles")
+  "note_mark": true,               // true = add a NOTE line under the SKUs on the label and list the orders in the summary. false = off
+  "note_text": "NOTE",             // the word stamped on the label
+  "keep_note_slips": true,         // true = keep that order's packing slip (4x6) right behind its label so the note can be read. false = drop it like the others
+
   // ---- Safety alarm
   "layout_alarm_percent": 25,      // warn loudly if this % (or more) of orders have no SKU (Shopify may have changed the slip layout). 0 = off
 

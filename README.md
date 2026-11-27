@@ -30,7 +30,7 @@ For every order in the Shopify PDF it:
 1. Finds the shipping label and its packing slip (the slip is the page after the label).
 2. Reads the items on the slip and works out each SKU and quantity. A quantity above 1 is written as `3 x kg h`; a quantity of 1 is just the SKU.
 3. Stamps those lines in blue at the bottom of the label (below the address area, clear of the barcode). If the slip says **REPEAT CUSTOMER**, a `*` is added after the first SKU (`**` for very frequent customers, see [Settings](#settings)).
-4. Drops the packing slips, so the output contains labels only.
+4. Drops the packing slips, so the output contains labels only. **Exception:** an order whose slip has a **note** (for example "2 dark green and 2 wine purple candles") keeps its slip right behind its label, and its label gets a blue `NOTE` line under the SKUs (see [Settings](#settings)).
 5. Sorts the labels into the **groups** you define in `sort_groups.json` (for example all 2cm dipped candles together, then tealights, with honey and beeswax last), and by number within each group. Orders that need checking come first, then **priority postage** (a **Tracked 24** or **1st class** label) before everything else, unless you switch that off (see [Priority postage](#priority-postage-tracked-24-and-1st-class-first)).
 6. Adds a **pick list** page at the end: the total quantity of each SKU in the batch, for collecting stock. Group titles sit in the SKU column, and the last line is a bold **Total orders** (the number of orders, i.e. labels, in the batch) with its number under the Orders column. Priority orders are flagged in red (a `P1` beside a SKU, and a **PRIORITY orders** count under the total).
 7. Saves one PDF in the `Labels` folder and opens it.
@@ -112,6 +112,9 @@ All the options live in **`settings.json`**: open it in Notepad, change a value,
 | `repeat_double_star_from` | 15 | From this many orders (the number in "Order #N" on the slip) use `**` instead. `0` = never |
 | `gift_mark` | true | Slip's NOTES say `GIFT MESSAGE`: add that text as a last line on the label and list the order in the summary. `false` = off |
 | `gift_text` | `GIFT MESSAGE` | The words stamped on a gift-message label |
+| `note_mark` | true | The order's slip has a note: add a `NOTE` line under the SKUs on the label and list the order in the summary. `false` = off |
+| `note_text` | `NOTE` | The word stamped on such a label |
+| `keep_note_slips` | true | Keep the 4x6 packing slip of an order with a note right behind its label, so the note can be read. `false` = drop it like the other slips |
 | `picklist_group_titles` | true | Show each group's name (from `sort_groups.json`) as a bold title with a line under it |
 | `picklist_page_per_group` | false | `true` = start every group on a new page |
 | `picklist_priority_flag` | true | Pick list: a red `P<n>` beside a SKU when `n` of its orders are priority postage, and a red **PRIORITY orders** count under Total orders. `false` = off |
@@ -128,6 +131,8 @@ All the options live in **`settings.json`**: open it in Notepad, change a value,
 **Repeat customers.** The program does not know who is a repeat customer; it reads the packing slip. Shopify prints "★ REPEAT CUSTOMER (Order #2) ★" on the slip for web and eBay orders. Etsy orders show it only if the Etsy-Shopify sync tags them and the packing slip template has the repeat-customer line (the template is in the `shopify-packing-slip` project). Slip says repeat, label gets `*`; no repeat text, no star.
 
 **Gift messages.** Etsy makes the A4 gift message page; the sync cannot print it. So the program only reminds you. The Etsy-Shopify sync writes `GIFT MESSAGE (print from Etsy):` into the order note when (and only when) the buyer included a gift message, Shopify prints the note on the slip, and the program reads it from there (only the text after the NOTES heading is searched). The label gets a last line `GIFT MESSAGE` and the summary lists those orders in yellow. A gift order with no message gets nothing.
+
+**Notes.** Shopify only prints the **NOTES** heading on a slip when the order has a note, so that is what the program looks for. Text the Etsy-Shopify sync writes by itself does **not** count: `Imported from Etsy. Receipt ID: ...` and `Etsy discount: ...` (older orders), `GIFT ORDER ...`, and a note that is only the Etsy gift message (that order already gets the `GIFT MESSAGE` line; a `Buyer Note:` next to it does count). An order with a real note shows a yellow `[NOTE]` in the window, the summary lists those orders, and the output PDF has its slip as the page after its label (the window says how many slips were added). The slip is printed on the label printer like any 4x6 page, so it uses one label sheet; set `keep_note_slips` to `false` if you would rather only see the `NOTE` marker.
 
 A typo in a setting name is reported in the window. If the file itself is broken (for example a missing comma) the program says so with the line number and uses its built-in defaults. Command-line options (below) add to or override these for one run.
 
@@ -233,6 +238,7 @@ Files given by name stay where they are unless `--move` is added.
 - **No SKU.** The `[bracketed option]` from the title is stamped, or the first ~28 characters of the title, and the order is flagged `~~`.
 - **Stamping.** The text is drawn onto a transparent page and merged on top of the label. It uses Arial if available, and shrinks or uses two columns if there are many lines.
 - **Sort.** Orders to check first, then priority postage (`priority_first`), then by group (`sort_groups.json`), then single-item orders by pattern and number (`2 dip` before `12 dip`), then multi-item orders in that group.
+- **Notes.** `slip_note` reads the text after the NOTES heading of each slip, removes the sync's own wording (`SYSTEM_NOTE_RE`) and a gift-message-only note, and what is left is the note. The slip's page number is kept so the slip can be copied to the output behind its label.
 - **Priority.** Read from the label page (not the slip): a word `24` at least 30 points tall on a page containing "Tracked", or a phrase from `priority_words`.
 - **Output.** Sorted labels, then the pick list pages, written to one PDF.
 

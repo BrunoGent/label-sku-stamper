@@ -53,6 +53,7 @@ DEFAULTS = {
     "picklist_priority_flag": True, "priority_words": ["1st class", "first class", "special delivery"],
     "repeat_star": True, "repeat_double_star_from": 15,
     "gift_mark": True, "gift_text": "GIFT MESSAGE",
+    "note_mark": True, "note_text": "NOTE", "keep_note_slips": True,
     "layout_alarm_percent": 25, "open_after": True, "move_originals": True, "strip_typed_text": False,
     "out_dir": "Labels", "done_dir": "done", "downloads": None, "pattern": "shipping*.pdf", "watch_seconds": 2,
 }
@@ -337,6 +338,27 @@ def has_gift_message(text):
     return bool(found and GIFT_RE.search(notes))
 
 
+# Text the Etsy-Shopify sync (or an older version of it) writes into the note by itself. It is not a note to read.
+SYSTEM_NOTE_RE = re.compile(
+    r"Imported\s+from\s+Etsy\.?\s*Receipt\s+ID:?\s*\d+\.?"
+    r"|Etsy\s+discount:\s*£?[\d.,]+\.?"
+    r"|(?:🎁\s*)?GIFT\s+ORDER(?:\s*\(\s*Do\s+not\s+show\s+prices\s+on\s+packing\s+slip\s*\))?", re.I)
+
+
+def slip_note(text):
+    """The note to read on a packing slip ('' = none). Shopify only prints the NOTES heading when there is a note.
+    Not counted: text the sync writes by itself ("Imported from Etsy. Receipt ID: ...", "Etsy discount: ...",
+    "GIFT ORDER ..."), and a note that is only the Etsy gift message (it has its own GIFT MESSAGE mark; a
+    "Buyer Note:" next to it does count)."""
+    _, found, notes = text.partition("NOTES")
+    if not found:
+        return ""
+    if has_gift_message(text) and "buyer note" not in notes.lower():
+        return ""
+    rest = SYSTEM_NOTE_RE.sub(" ", notes)
+    return " ".join(rest.split()) if re.search(r"\w", rest) else ""
+
+
 def parse_pdf(src):
     """-> (orders, notes). orders: [{page, order, items}]; notes: warnings about the file."""
     notes, orders, slips = [], [], []
@@ -347,17 +369,19 @@ def parse_pdf(src):
                 if not orders:
                     notes.append(f"page {i + 1}: packing slip with no label before it - ignored")
                     continue
-                slips.append((len(orders) - 1, order_no(t), *body_lines(pg), repeat_of(t), has_gift_message(t)))
+                slips.append((len(orders) - 1, order_no(t), *body_lines(pg), repeat_of(t), has_gift_message(t), i, bool(slip_note(t))))
             else:
                 orders.append({"page": i, "order": "?", "items": [], "slip": False, "repeat": None, "gift": False,
-                               "priority": label_priority(pg, t)})
+                               "priority": label_priority(pg, t), "note": False, "slip_page": None})
         lines_all = [l for s in slips for l in s[2]]
         colmax = max([l["x1"] for l in lines_all] + [SLIP_COLUMN_EDGE])   # floor: a batch with no wrapped title still needs a sane edge
-        for oi, num, lines, marks, rep_n, gift in slips:
+        for oi, num, lines, marks, rep_n, gift, slip_page, has_note in slips:
             o = orders[oi]
             o["order"] = num
             o["repeat"] = rep_n
             o["gift"] = gift
+            o["note"] = has_note
+            o["slip_page"] = slip_page
             o["slip"] = True
             o["items"] += parse_items(lines, marks, colmax)
     for o in orders:
@@ -731,6 +755,7 @@ def process(src, a, cfg):
     reader = PdfReader(str(src))
     writer = PdfWriter()
     problems, titled, overflow, busiest = [], [], [], (0, 0)
+    kept_slips = 0
     last_group = None
     for n, o in enumerate(orders):
         text = [fmt(q, s) for q, s, _, _ in o["items"]]
@@ -751,22 +776,31 @@ def process(src, a, cfg):
         if star and text:
             text[0] += " " + star                          # same habit as writing * by hand
         gift = bool(o.get("gift")) and bool(S["gift_mark"])
+        note = bool(o.get("note")) and bool(S["note_mark"])
+        keep_slip = bool(o.get("note")) and bool(S["keep_note_slips"]) and o.get("slip_page") is not None
         print(f"  {mark} Order {o['order']:>11}: {' | '.join(text) or '-'}" + (f"  {YELLOW}{BOLD}[{S['gift_text']}]{OFF}" if gift else "")
+              + (f"  {YELLOW}{BOLD}[{S['note_text']}]{OFF}" if note else "")
               + (f"  {RED}{BOLD}[PRIORITY: {o['priority']}]{OFF}" if o.get("priority") else ""))
         label = writer.add_page(reader.pages[o["page"]])   # attach first, then edit (newer pypdf requires this)
+        page_no = len(writer.pages) - 1                     # where this label sits in the output (slips kept before it shift the count)
         if a.strip and "/Annots" in label:
             del label["/Annots"]                            # remove text typed by hand
         if not text:
             text = [CHECK_TEXT]
+        if note:
+            text = text + [S["note_text"]]                  # own line after the SKUs: the order has a note to read
         if gift:
             text = text + [S["gift_text"]]                  # own line, last: the gift card comes from Etsy
         w, h = float(label.mediabox.width), float(label.mediabox.height)
         ov, ok = overlay(w, h, text, a.x, a.y, a.size)
         label.merge_page(ov)
+        if keep_slip:
+            writer.add_page(reader.pages[o["slip_page"]])    # the packing slip with the note stays right behind its label
+            kept_slips += 1
         if not ok:
             overflow.append(o["order"])
         if len(text) > busiest[0]:
-            busiest = (len(text), n)
+            busiest = (len(text), page_no)
 
     rows, unknown = picklist(orders, groups)
     stray = sorted({s for o in orders for _, s, _, g in o['items']
@@ -786,6 +820,11 @@ def process(src, a, cfg):
         where = ("printed first" if GROUP_OPTS["priority_first"] and a.sort
                  else 'not moved: "priority_first" is off in sort_groups.json (or sorting is off)')
         print(f"  {RED}{BOLD}{n_priority} priority postage order{'s' if n_priority != 1 else ''} ({kinds}){OFF}: {where}")
+    noted = [o["order"] for o in orders if o.get("note")] if (S["note_mark"] or S["keep_note_slips"]) else []
+    if noted:
+        what = ((f"labels say {S['note_text']}" if S["note_mark"] else "") + (", " if S["note_mark"] and S["keep_note_slips"] else "")
+                + ("the packing slip is kept behind the label" if S["keep_note_slips"] else ""))
+        print(f"  {YELLOW}{BOLD}{len(noted)} order{'s' if len(noted) != 1 else ''} with a note{OFF}{YELLOW} ({what}): {', '.join(noted)}{OFF}")
     gifts = [o["order"] for o in orders if o.get("gift")] if S["gift_mark"] else []
     if gifts:
         print(f"  {YELLOW}{BOLD}{len(gifts)} order{'s' if len(gifts) != 1 else ''} with a gift message{OFF}{YELLOW}: print "
@@ -836,7 +875,8 @@ def process(src, a, cfg):
             writer.add_page(pg)                  # pick list = last page(s) of the same PDF
     with open(out, "wb") as f:
         writer.write(f)
-    print(f"  -> {out}  ({total} labels" + (" + pick list as the last page)" if a.picklist else ")"))
+    print(f"  -> {out}  ({total} labels" + (f" + {kept_slips} packing slip{'s' if kept_slips != 1 else ''} with a note" if kept_slips else "")
+          + (" + pick list as the last page)" if a.picklist else ")"))
     if a.preview:
         png = preview_png(out, busiest[1], out.with_suffix(".png"))
         if png:

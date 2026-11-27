@@ -289,6 +289,50 @@ class GiftMessages(unittest.TestCase):
             self.assertIn("3001", run.stdout)
 
 
+class NoteSlips(unittest.TestCase):
+    """An order whose slip has a NOTES section keeps its slip behind its label and gets NOTE on the label."""
+
+    def setUp(self):
+        s.load_settings()
+
+    def has_note(self, note_lines):
+        orders, _ = parse([("4001", [(1, ["12 TL"])], note_lines)])
+        return orders[0]["note"]
+
+    def test_which_notes_count(self):
+        self.assertTrue(self.has_note(["2 dark green and 2 wine purple candles"]))
+        self.assertTrue(self.has_note(["Buyer Note:", "Please leave with the neighbour"]))
+        self.assertFalse(self.has_note([]))                                          # empty NOTES section
+        self.assertFalse(self.has_note(["Imported from Etsy. Receipt ID: 4236074715"]))          # written by the sync, not a note
+        self.assertFalse(self.has_note(["Imported from Etsy. Receipt ID: 42360. Etsy discount: £3.50"]))
+        self.assertFalse(self.has_note(["Imported from Etsy. Receipt ID: 42360 GIFT ORDER (Do not show prices on packing slip)"]))
+        self.assertTrue(self.has_note(["Imported from Etsy. Receipt ID: 42360", "Leave behind the recycling box"]))   # real note next to it
+        self.assertFalse(self.has_note(["GIFT MESSAGE (print from Etsy):", "Hi Mum"]))   # gift message only: it has its own mark
+        self.assertTrue(self.has_note(["GIFT MESSAGE (print from Etsy):", "Hi Mum", "Buyer Note:", "Thanks"]))
+
+    def test_slip_page_is_remembered(self):
+        orders, _ = parse([("4001", [(1, ["12 TL"])], []), ("4002", [(1, ["60mm"])], ["Please wrap it"])])
+        self.assertEqual([o["slip_page"] for o in orders], [1, 3])                   # label 0, slip 1, label 2, slip 3
+
+    def test_end_to_end_slip_kept_and_label_marked(self):
+        import subprocess
+        from pypdf import PdfReader
+        with tempfile.TemporaryDirectory() as d:
+            src, out = Path(d) / "shipping_t.pdf", Path(d) / "out.pdf"
+            make_pdf(src, [("5001", [(1, ["12 TL"])], ["2 dark green and 2 wine purple candles"]),
+                           ("5002", [(1, ["60mm"])], [])])
+            cmd = [sys.executable, str(Path(s.__file__)), str(src), "-o", str(out), "--no-open", "--no-picklist", "--no-sort"]
+            run = subprocess.run(cmd, capture_output=True, text=True, cwd=d)
+            self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+            pages = [p.extract_text() or "" for p in PdfReader(str(out)).pages]
+            self.assertEqual(len(pages), 3)                                          # label 5001, its slip, label 5002
+            self.assertIn("NOTE", pages[0])
+            self.assertIn("2 dark green", pages[1])                                  # the kept slip, right behind its label
+            self.assertNotIn("NOTE", pages[2])
+            self.assertIn("1 order with a note", run.stdout)
+            self.assertIn("1 packing slip with a note", run.stdout)
+
+
 class RepeatCustomers(unittest.TestCase):
     """The packing slip template prints "REPEAT CUSTOMER (Order #N)"; the label gets * (or ** from
     repeat_double_star_from orders). If the template wording changes these tests are the early warning."""
