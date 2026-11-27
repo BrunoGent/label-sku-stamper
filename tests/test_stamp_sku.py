@@ -333,6 +333,83 @@ class NoteSlips(unittest.TestCase):
             self.assertIn("1 packing slip with a note", run.stdout)
 
 
+class LabelCovers(unittest.TestCase):
+    """Options to cover "MARKETPLACE SELLER" and "Shopify" on the label, write a replacement, and add the logo."""
+
+    def setUp(self):
+        s.load_settings()
+
+    def tearDown(self):
+        s.load_settings()
+
+    def regions(self, extra=None):
+        import pdfplumber
+        with tempfile.TemporaryDirectory() as d:
+            f = Path(d) / "label.pdf"
+            c = canvas.Canvas(str(f), pagesize=(288, 432))
+            c.setFont("Helvetica", 12)
+            c.drawString(20, 400, "Mr Seller")                                  # a customer named Seller: top area, must never match
+            c.setFont("Helvetica-Bold", 16)
+            c.drawString(21, 432 - 346, "MARKETPLACE")
+            c.drawString(21, 432 - 362, "SELLER")
+            c.setFont("Helvetica-Bold", 10)
+            c.drawRightString(265, 432 - 395, "Shopify")
+            for fn in (extra or []):
+                fn(c)
+            c.save()
+            with pdfplumber.open(str(f)) as pl:
+                return s.label_regions(pl.pages[0])
+
+    def test_finds_the_two_areas_in_the_footer_only(self):
+        r = self.regions()
+        self.assertEqual(set(r), {"marketplace", "shopify"})
+        x0, top, x1, bottom, size = r["marketplace"]
+        self.assertLess(x0, 25)
+        self.assertGreater(x1, 100)
+        self.assertGreater(top, 320)                                           # not the "Seller" in the address area
+
+    def test_nothing_found_on_a_label_without_the_wording(self):
+        import pdfplumber
+        with tempfile.TemporaryDirectory() as d:
+            f = Path(d) / "label.pdf"
+            c = canvas.Canvas(str(f), pagesize=(288, 432))
+            c.drawString(20, 400, "Mr Seller")
+            c.save()
+            with pdfplumber.open(str(f)) as pl:
+                self.assertEqual(s.label_regions(pl.pages[0]), {})
+
+    def overlay_text(self, regions):
+        ov = s.decoration_overlay(288, 432, regions)
+        return None if ov is None else (ov.extract_text() or "")
+
+    def test_all_off_draws_nothing(self):
+        s.S.update(cover_marketplace_seller=False, cover_shopify=False, logo=False)
+        self.assertIsNone(s.decoration_overlay(288, 432, self.regions()))
+
+    def test_replacement_text_only_when_shopify_is_covered(self):
+        r = self.regions()
+        s.S.update(cover_shopify=True, shopify_replacement="beeminedorset.com")
+        self.assertIn("beeminedorset.com", self.overlay_text(r))
+        s.S.update(shopify_replacement="")                                     # cover only, no text
+        self.assertEqual(self.overlay_text(r), "")
+        s.S.update(cover_shopify=False, cover_marketplace_seller=True)
+        self.assertEqual(self.overlay_text(r), "")                              # marketplace cover has no text
+        self.assertIsNotNone(s.decoration_overlay(288, 432, r))
+
+    def test_logo_covers_marketplace_and_needs_the_wording_to_place_itself(self):
+        s.S.update(logo=True, cover_marketplace_seller=False, cover_shopify=False)
+        self.assertIsNotNone(s.decoration_overlay(288, 432, self.regions()))
+        self.assertIsNone(s.decoration_overlay(288, 432, {}))                   # label without the block: left as printed
+
+    def test_logo_files_exist_and_style_picks_the_file(self):
+        self.assertTrue((Path(s.__file__).parent / "assets" / "logo_thermal.png").exists())
+        self.assertTrue((Path(s.__file__).parent / "assets" / "logo_colour.png").exists())
+        s.S["logo_style"] = "thermal"
+        self.assertEqual(s.logo_path().name, "logo_thermal.png")
+        s.S["logo_style"] = "colour"
+        self.assertEqual(s.logo_path().name, "logo_colour.png")
+
+
 class RepeatCustomers(unittest.TestCase):
     """The packing slip template prints "REPEAT CUSTOMER (Order #N)"; the label gets * (or ** from
     repeat_double_star_from orders). If the template wording changes these tests are the early warning."""

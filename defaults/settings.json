@@ -40,6 +40,16 @@
   "note_text": "NOTE",             // the word stamped on the label
   "keep_note_slips": true,         // true = keep that order's packing slip (4x6) right behind its label so the note can be read. false = drop it like the others
 
+  // ---- Wording printed on Shopify's Royal Mail label (all OFF until you switch them on)
+  // Each option draws a white box over the wording. Before using these, check that Royal Mail / Shopify are happy
+  // for the label to be changed. Barcodes, the routing code, the service banner and the address are never touched.
+  "cover_marketplace_seller": false,   // true = white box over "MARKETPLACE SELLER"
+  "cover_shopify": false,              // true = white box over the word "Shopify" (the line above, "Paid and printed from", stays)
+  "shopify_replacement": "beeminedorset.com",   // text written where "Shopify" was; "" = just leave it blank. Only used when cover_shopify is true
+  "logo": false,                       // true = the logo replaces "MARKETPLACE SELLER" (that wording is covered too)
+  "logo_style": "thermal",             // "thermal" = black and white, made for the thermal label printer; "colour" = the full colour logo
+  "logo_height": 34,                   // logo height in points (the MARKETPLACE SELLER block is about 33 tall; taller runs into the SKU lines)
+
   // ---- Safety alarm
   "layout_alarm_percent": 25,      // warn loudly if this % (or more) of orders have no SKU (Shopify may have changed the slip layout). 0 = off
 

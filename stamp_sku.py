@@ -54,6 +54,8 @@ DEFAULTS = {
     "repeat_star": True, "repeat_double_star_from": 15,
     "gift_mark": True, "gift_text": "GIFT MESSAGE",
     "note_mark": True, "note_text": "NOTE", "keep_note_slips": True,
+    "cover_marketplace_seller": False, "cover_shopify": False, "shopify_replacement": "beeminedorset.com",
+    "logo": False, "logo_style": "thermal", "logo_height": 34,
     "layout_alarm_percent": 25, "open_after": True, "move_originals": True, "strip_typed_text": False,
     "out_dir": "Labels", "done_dir": "done", "downloads": None, "pattern": "shipping*.pdf", "watch_seconds": 2,
 }
@@ -131,6 +133,17 @@ def load_settings():
     if bad or not isinstance(S["picklist_columns"], list):
         print(f"{YELLOW}settings.json: picklist_columns may only contain \"qty\", \"sku\", \"orders\" (got {bad or S['picklist_columns']}){OFF}")
         FILE_ERRORS.append("settings.json: picklist_columns has an unknown column name - it was ignored")
+    if str(S["logo_style"]).lower() not in ("thermal", "colour"):
+        FILE_ERRORS.append('settings.json: "logo_style" must be "thermal" or "colour" - "thermal" used')
+        S["logo_style"] = "thermal"
+    try:
+        if float(S["logo_height"]) <= 0:
+            raise ValueError
+    except (TypeError, ValueError):
+        FILE_ERRORS.append('settings.json: "logo_height" must be a number above 0 (points) - 34 used')
+        S["logo_height"] = 34
+    if S["logo"] and not logo_path().exists():
+        FILE_ERRORS.append(f"settings.json: logo is on but {logo_path().name} is missing from the assets folder (run py make_logo.py) - no logo drawn")
     return S
 
 
@@ -216,6 +229,68 @@ def label_priority(page, text):
         if str(word).strip() and str(word).strip().lower() in low:
             return str(word).strip()
     return ""
+
+
+def decorations_on():
+    return bool(S["cover_marketplace_seller"] or S["cover_shopify"] or S["logo"])
+
+
+def label_regions(page):
+    """Where Shopify's Royal Mail label prints "MARKETPLACE SELLER" and the word "Shopify" (in points from the top left):
+    {"marketplace": (x0, top, x1, bottom, size), "shopify": (...)}, only the ones found. Only the footer of the label
+    (below 70% of its height) is searched, so a customer named Seller can never be covered."""
+    out = {}
+    low = page.height * 0.7
+    words = [w for w in page.extract_words(extra_attrs=["size"]) if w["top"] > low]
+    mk = [w for w in words if w["text"].lower() in ("marketplace", "seller") and w["size"] >= 10]
+    if {w["text"].lower() for w in mk} == {"marketplace", "seller"}:
+        out["marketplace"] = (min(w["x0"] for w in mk), min(w["top"] for w in mk),
+                              max(w["x1"] for w in mk), max(w["bottom"] for w in mk), max(w["size"] for w in mk))
+    sh = [w for w in words if w["text"].lower() == "shopify"]
+    if sh:
+        w = max(sh, key=lambda w: w["top"])
+        out["shopify"] = (w["x0"], w["top"], w["x1"], w["bottom"], w["size"])
+    return out
+
+
+def logo_path():
+    return HERE / "assets" / ("logo_colour.png" if str(S["logo_style"]).lower() == "colour" else "logo_thermal.png")
+
+
+def decoration_overlay(w, h, regions):
+    """A transparent page with white boxes over the wording to hide, the replacement text and the logo. -> pypdf page,
+    or None when there is nothing to draw on this label. Merged UNDER the SKU stamp."""
+    pad = 1.5
+    mk, sh = regions.get("marketplace"), regions.get("shopify")
+    hide_mk = bool(mk and (S["cover_marketplace_seller"] or S["logo"]))
+    hide_sh = bool(sh and S["cover_shopify"])
+    if not (hide_mk or hide_sh):
+        return None
+    buf = io.BytesIO()
+    c = canvas.Canvas(buf, pagesize=(w, h))
+    c.setFillColorRGB(1, 1, 1)
+    for hide, r in ((hide_mk, mk), (hide_sh, sh)):
+        if hide:
+            c.rect(r[0] - pad, h - r[3] - pad, (r[2] - r[0]) + 2 * pad, (r[3] - r[1]) + 2 * pad, stroke=0, fill=1)
+    if hide_sh and str(S["shopify_replacement"]).strip():             # the replacement text, right-aligned where "Shopify" ended
+        text, fs = safe_text(str(S["shopify_replacement"]).strip()), float(sh[4])
+        while fs > 5 and pdfmetrics.stringWidth(text, font_bold(), fs) > sh[2] - 150:
+            fs -= 0.5
+        c.setFillColorRGB(0, 0, 0)
+        c.setFont(font_bold(), fs)
+        c.drawRightString(sh[2], h - sh[3] + 0.22 * fs, text)
+    if S["logo"] and mk and logo_path().exists():
+        from reportlab.lib.utils import ImageReader
+        img = ImageReader(str(logo_path()))
+        iw, ih = img.getSize()
+        lh = float(S["logo_height"])
+        lw = lh * iw / ih
+        if lw > 175 - mk[0]:                                          # keep clear of the "Post by / Paid and printed" text on the right
+            lw, lh = 175 - mk[0], (175 - mk[0]) * ih / iw
+        c.drawImage(img, mk[0], h - (mk[1] + mk[3]) / 2 - lh / 2, lw, lh, mask="auto")
+    c.save()
+    buf.seek(0)
+    return PdfReader(buf).pages[0]
 
 
 def order_no(text):
@@ -372,7 +447,8 @@ def parse_pdf(src):
                 slips.append((len(orders) - 1, order_no(t), *body_lines(pg), repeat_of(t), has_gift_message(t), i, bool(slip_note(t))))
             else:
                 orders.append({"page": i, "order": "?", "items": [], "slip": False, "repeat": None, "gift": False,
-                               "priority": label_priority(pg, t), "note": False, "slip_page": None})
+                               "priority": label_priority(pg, t), "note": False, "slip_page": None,
+                               "regions": label_regions(pg) if decorations_on() else {}})
         lines_all = [l for s in slips for l in s[2]]
         colmax = max([l["x1"] for l in lines_all] + [SLIP_COLUMN_EDGE])   # floor: a batch with no wrapped title still needs a sane edge
         for oi, num, lines, marks, rep_n, gift, slip_page, has_note in slips:
@@ -755,7 +831,7 @@ def process(src, a, cfg):
     reader = PdfReader(str(src))
     writer = PdfWriter()
     problems, titled, overflow, busiest = [], [], [], (0, 0)
-    kept_slips = 0
+    kept_slips = not_decorated = 0
     last_group = None
     for n, o in enumerate(orders):
         text = [fmt(q, s) for q, s, _, _ in o["items"]]
@@ -792,6 +868,12 @@ def process(src, a, cfg):
         if gift:
             text = text + [S["gift_text"]]                  # own line, last: the gift card comes from Etsy
         w, h = float(label.mediabox.width), float(label.mediabox.height)
+        if decorations_on():
+            deco = decoration_overlay(w, h, o.get("regions") or {})
+            if deco is not None:
+                label.merge_page(deco)                      # white boxes / replacement text / logo first, the SKU stamp on top
+            else:
+                not_decorated += 1
         ov, ok = overlay(w, h, text, a.x, a.y, a.size)
         label.merge_page(ov)
         if keep_slip:
@@ -820,6 +902,9 @@ def process(src, a, cfg):
         where = ("printed first" if GROUP_OPTS["priority_first"] and a.sort
                  else 'not moved: "priority_first" is off in sort_groups.json (or sorting is off)')
         print(f"  {RED}{BOLD}{n_priority} priority postage order{'s' if n_priority != 1 else ''} ({kinds}){OFF}: {where}")
+    if not_decorated:
+        print(f"  {YELLOW}{not_decorated} label{'s' if not_decorated != 1 else ''} had none of the wording the cover / logo options look for "
+              f"(MARKETPLACE SELLER, Shopify): left as printed. Check them if that is not expected.{OFF}")
     noted = [o["order"] for o in orders if o.get("note")] if (S["note_mark"] or S["keep_note_slips"]) else []
     if noted:
         what = ((f"labels say {S['note_text']}" if S["note_mark"] else "") + (", " if S["note_mark"] and S["keep_note_slips"] else "")

@@ -2,3 +2,4 @@ pypdf
 pdfplumber
 reportlab
 pypdfium2
+pillow

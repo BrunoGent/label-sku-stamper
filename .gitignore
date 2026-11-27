@@ -2,6 +2,7 @@
 *.pdf
 *.csv
 *.png
+!assets/*.png
 Labels/
 done/
 __pycache__/

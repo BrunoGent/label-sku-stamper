@@ -71,6 +71,8 @@ label-sku-stamper/
   requirements.txt         Python packages needed
   settings.json            all options (edit in Notepad)
   sort_groups.json         the label order: which SKUs go together, and in what order
+  assets/                  the logo files (logo_thermal.png, logo_colour.png) for the optional logo
+  make_logo.py             rebuilds the two logo files from assets/logo_colour_source.png
   docs/                    printable user guide
   Labels/                  results: <name>_sku.pdf          (created on first run)
   done/                    originals after processing        (created on first run)
@@ -115,6 +117,12 @@ All the options live in **`settings.json`**: open it in Notepad, change a value,
 | `note_mark` | true | The order's slip has a note: add a `NOTE` line under the SKUs on the label and list the order in the summary. `false` = off |
 | `note_text` | `NOTE` | The word stamped on such a label |
 | `keep_note_slips` | true | Keep the 4x6 packing slip of an order with a note right behind its label, so the note can be read. `false` = drop it like the other slips |
+| `cover_marketplace_seller` | false | White box over "MARKETPLACE SELLER" on the label (see [Covering wording and the logo](#covering-wording-and-adding-the-logo-optional)) |
+| `cover_shopify` | false | White box over the word "Shopify" at the bottom right |
+| `shopify_replacement` | `beeminedorset.com` | Text written where "Shopify" was (only when `cover_shopify` is true). `""` = leave it blank |
+| `logo` | false | The logo replaces "MARKETPLACE SELLER" (that wording is covered too) |
+| `logo_style` | `thermal` | `thermal` = black and white for the thermal label printer, `colour` = full colour |
+| `logo_height` | 34 | Logo height in points (the block it replaces is about 33 tall; taller runs into the SKU lines) |
 | `picklist_group_titles` | true | Show each group's name (from `sort_groups.json`) as a bold title with a line under it |
 | `picklist_page_per_group` | false | `true` = start every group on a new page |
 | `picklist_priority_flag` | true | Pick list: a red `P<n>` beside a SKU when `n` of its orders are priority postage, and a red **PRIORITY orders** count under Total orders. `false` = off |
@@ -137,6 +145,22 @@ All the options live in **`settings.json`**: open it in Notepad, change a value,
 A typo in a setting name is reported in the window. If the file itself is broken (for example a missing comma) the program says so with the line number and uses its built-in defaults. Command-line options (below) add to or override these for one run.
 
 To tune the position: run with `--preview`, look at the PNG it opens, change `x`, `y` or `size`, and repeat.
+
+## Covering wording and adding the logo (optional)
+
+Shopify's Royal Mail label prints **MARKETPLACE SELLER** at the bottom left and **Shopify** at the bottom right ("Paid and printed from Shopify"). Three options in `settings.json` (all **off** by default) change that:
+
+| Option | What it does |
+|---|---|
+| `cover_marketplace_seller` | White box over "MARKETPLACE SELLER" |
+| `cover_shopify` + `shopify_replacement` | White box over "Shopify", with `beeminedorset.com` (or your own text, or nothing) written in its place. The words "Paid and printed from" stay, so the line reads "Paid and printed from beeminedorset.com" |
+| `logo`, `logo_style`, `logo_height` | The logo replaces "MARKETPLACE SELLER" (covering it too). `thermal` = the black and white version for the thermal printer, `colour` = full colour |
+
+- **Where.** The program finds the wording by reading the label's own text, only in the bottom 30% of the label, so it follows the label if it shifts a little and can never cover a customer named Seller. A label that has none of the wording is left as printed, and the window says how many.
+- **Order of drawing.** The white boxes, replacement text and logo go on first, then the SKU stamp on top.
+- **The thermal logo** is made by `make_logo.py` from `assets/logo_colour_source.png`. Thermal printers print only black dots, so pale colours (the yellow of the bee, the teal shadow) would turn into speckle. The thermal version keeps just the dark parts (the lettering, the outlines and the stripe) as solid black on white, which prints crisply. To change it: replace the source file and run `py make_logo.py` (add a number, e.g. `py make_logo.py 130`, to make it bolder or lighter; default 110).
+- **Never covered:** the barcodes, the routing code, the service banner, the Royal Mail logo, the address and the "Post by" date.
+- **Check first.** This alters a label that Shopify generated to Royal Mail's format. Make sure Royal Mail and Shopify are happy for it to be changed before relying on it, and print one test label first.
 
 ## Priority postage (Tracked 24 and 1st class first)
 
