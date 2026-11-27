@@ -46,9 +46,13 @@
   "cover_marketplace_seller": false,   // true = white box over "MARKETPLACE SELLER"
   "cover_shopify": false,              // true = white box over the word "Shopify" (the line above, "Paid and printed from", stays)
   "shopify_replacement": "beeminedorset.com",   // text written where "Shopify" was; "" = just leave it blank. Only used when cover_shopify is true
-  "logo": false,                       // true = the logo replaces "MARKETPLACE SELLER" (that wording is covered too)
+  "logo": false,                       // true = print the logo on the label
   "logo_style": "thermal",             // "thermal" = black and white, made for the thermal label printer; "colour" = the full colour logo
-  "logo_height": 34,                   // logo height in points (the MARKETPLACE SELLER block is about 33 tall; taller runs into the SKU lines)
+  "logo_x": 100,                       // the logo's top-left corner: points from the LEFT of the label (the label is 288 wide)
+  "logo_y": 347,                       // ... and from the TOP (the label is 432 tall). 100 / 347 = the empty space in the middle of the bottom box
+  "logo_height": 46,                   // logo height in points (the width follows). Too big and it runs into the text beside it
+  "sku_to_top": false,                 // true = the SKUs start at the top left of the bottom box, where MARKETPLACE SELLER is printed (that wording is covered).
+                                       // The text is kept clear of the logo and of Royal Mail's small print. false = the SKUs go at x / y above
 
   // ---- Safety alarm
   "layout_alarm_percent": 25,      // warn loudly if this % (or more) of orders have no SKU (Shopify may have changed the slip layout). 0 = off

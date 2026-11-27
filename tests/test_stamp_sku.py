@@ -396,10 +396,38 @@ class LabelCovers(unittest.TestCase):
         self.assertEqual(self.overlay_text(r), "")                              # marketplace cover has no text
         self.assertIsNotNone(s.decoration_overlay(288, 432, r))
 
-    def test_logo_covers_marketplace_and_needs_the_wording_to_place_itself(self):
-        s.S.update(logo=True, cover_marketplace_seller=False, cover_shopify=False)
+    def test_logo_is_placed_by_its_own_position_and_needs_no_wording(self):
+        s.S.update(logo=True, cover_marketplace_seller=False, cover_shopify=False, sku_to_top=False)
         self.assertIsNotNone(s.decoration_overlay(288, 432, self.regions()))
-        self.assertIsNone(s.decoration_overlay(288, 432, {}))                   # label without the block: left as printed
+        self.assertIsNotNone(s.decoration_overlay(288, 432, {}))                # a label without the wording still gets the logo
+        s.S["logo"] = False
+        self.assertIsNone(s.decoration_overlay(288, 432, {}))
+
+    def test_sku_to_top_covers_the_marketplace_block_and_moves_the_stamp(self):
+        r = self.regions()
+        s.S.update(sku_to_top=False, logo=False, cover_marketplace_seller=False, cover_shopify=False)
+        self.assertEqual(s.stamp_position(r, 40, 378, 11), (40, 378, None, None))            # off: the x / y settings
+        self.assertIsNone(s.decoration_overlay(288, 432, r))
+        s.S["sku_to_top"] = True
+        x, y, max_w, bottom = s.stamp_position(r, 40, 378, 11)
+        mk = r["marketplace"]
+        self.assertAlmostEqual(x, mk[0])                                                       # left edge of the block
+        self.assertAlmostEqual(y, mk[1] + 11 * 0.9)                                            # first line at the top of the block
+        self.assertIsNone(max_w)                                                               # no logo: full width
+        self.assertEqual(bottom, 408.0)                                                        # no footer wording on this label: default floor
+        self.assertIsNotNone(s.decoration_overlay(288, 432, r))                                # the old wording is covered
+        self.assertEqual(s.stamp_position({}, 40, 378, 11), (40, 378, None, None))             # no block found: back to x / y
+
+    def test_text_is_kept_clear_of_the_logo(self):
+        r = self.regions()
+        s.S.update(sku_to_top=True, logo=True, logo_x=100)
+        x, y, max_w, bottom = s.stamp_position(r, 40, 378, 11)
+        self.assertAlmostEqual(max_w, 100 - x - 4)
+        size, cols, ok = s.layout(["2 x 20 dip 2cm *", "5 x 60mm"], 288, 432, x, y, 11, max_w, bottom)
+        self.assertLess(size, 11)                                                              # shrunk to fit beside the logo
+        self.assertTrue(ok)
+        size_full, _, _ = s.layout(["2 x 20 dip 2cm *", "5 x 60mm"], 288, 432, x, y, 11)
+        self.assertEqual(size_full, 11)                                                        # without the limit it fits at full size
 
     def test_logo_files_exist_and_style_picks_the_file(self):
         self.assertTrue((Path(s.__file__).parent / "assets" / "logo_thermal.png").exists())

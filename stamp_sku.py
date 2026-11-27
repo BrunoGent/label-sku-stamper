@@ -55,7 +55,7 @@ DEFAULTS = {
     "gift_mark": True, "gift_text": "GIFT MESSAGE",
     "note_mark": True, "note_text": "NOTE", "keep_note_slips": True,
     "cover_marketplace_seller": False, "cover_shopify": False, "shopify_replacement": "beeminedorset.com",
-    "logo": False, "logo_style": "thermal", "logo_height": 34,
+    "logo": False, "logo_style": "thermal", "logo_height": 46, "logo_x": 100, "logo_y": 347, "sku_to_top": False,
     "layout_alarm_percent": 25, "open_after": True, "move_originals": True, "strip_typed_text": False,
     "out_dir": "Labels", "done_dir": "done", "downloads": None, "pattern": "shipping*.pdf", "watch_seconds": 2,
 }
@@ -136,12 +136,13 @@ def load_settings():
     if str(S["logo_style"]).lower() not in ("thermal", "colour"):
         FILE_ERRORS.append('settings.json: "logo_style" must be "thermal" or "colour" - "thermal" used')
         S["logo_style"] = "thermal"
-    try:
-        if float(S["logo_height"]) <= 0:
-            raise ValueError
-    except (TypeError, ValueError):
-        FILE_ERRORS.append('settings.json: "logo_height" must be a number above 0 (points) - 34 used')
-        S["logo_height"] = 34
+    for key, floor in (("logo_height", 1), ("logo_x", 0), ("logo_y", 0)):
+        try:
+            if float(S[key]) < floor:
+                raise ValueError
+        except (TypeError, ValueError):
+            FILE_ERRORS.append(f'settings.json: "{key}" must be a number (points, at least {floor}) - the built-in value {DEFAULTS[key]} was used')
+            S[key] = DEFAULTS[key]
     if S["logo"] and not logo_path().exists():
         FILE_ERRORS.append(f"settings.json: logo is on but {logo_path().name} is missing from the assets folder (run py make_logo.py) - no logo drawn")
     return S
@@ -232,7 +233,7 @@ def label_priority(page, text):
 
 
 def decorations_on():
-    return bool(S["cover_marketplace_seller"] or S["cover_shopify"] or S["logo"])
+    return bool(S["cover_marketplace_seller"] or S["cover_shopify"] or S["logo"] or S["sku_to_top"])
 
 
 def label_regions(page):
@@ -250,11 +251,32 @@ def label_regions(page):
     if sh:
         w = max(sh, key=lambda w: w["top"])
         out["shopify"] = (w["x0"], w["top"], w["x1"], w["bottom"], w["size"])
+    ft = [w for w in words if w["text"].lower() in ("footprint", "carbon") and w["size"] <= 8]
+    if ft:                                                            # Royal Mail's small print along the bottom: keep SKUs clear of it
+        out["footer"] = (min(w["x0"] for w in ft), min(w["top"] for w in ft), max(w["x1"] for w in ft), max(w["bottom"] for w in ft), 6)
     return out
 
 
+def stamp_position(regions, x, y, size):
+    """Where the SKU stamp goes: (x, y of the first baseline, max width or None, lowest point or None).
+    sku_to_top: starts at the top-left of the block where "MARKETPLACE SELLER" is printed (that wording is covered) and
+    stops above Royal Mail's small print. With a logo to the right of the text, the text is kept clear of it."""
+    max_w = bottom = None
+    mk = regions.get("marketplace")
+    if S["sku_to_top"] and mk:
+        x, y = mk[0], mk[1] + size * 0.9
+        ft = regions.get("footer")
+        bottom = (ft[1] - 3) if ft else 408.0
+    if S["logo"] and logo_path().exists() and float(S["logo_x"]) > x:
+        max_w = float(S["logo_x"]) - x - 4
+    return x, y, max_w, bottom
+
+
+ASSETS = Path(__file__).resolve().parent / "assets"      # the logo files; always next to the program (HERE can be pointed elsewhere in tests)
+
+
 def logo_path():
-    return HERE / "assets" / ("logo_colour.png" if str(S["logo_style"]).lower() == "colour" else "logo_thermal.png")
+    return ASSETS / ("logo_colour.png" if str(S["logo_style"]).lower() == "colour" else "logo_thermal.png")
 
 
 def decoration_overlay(w, h, regions):
@@ -262,9 +284,10 @@ def decoration_overlay(w, h, regions):
     or None when there is nothing to draw on this label. Merged UNDER the SKU stamp."""
     pad = 1.5
     mk, sh = regions.get("marketplace"), regions.get("shopify")
-    hide_mk = bool(mk and (S["cover_marketplace_seller"] or S["logo"]))
+    hide_mk = bool(mk and (S["cover_marketplace_seller"] or S["sku_to_top"]))   # sku_to_top writes the SKUs where it was
     hide_sh = bool(sh and S["cover_shopify"])
-    if not (hide_mk or hide_sh):
+    show_logo = bool(S["logo"] and logo_path().exists())
+    if not (hide_mk or hide_sh or show_logo):
         return None
     buf = io.BytesIO()
     c = canvas.Canvas(buf, pagesize=(w, h))
@@ -279,15 +302,16 @@ def decoration_overlay(w, h, regions):
         c.setFillColorRGB(0, 0, 0)
         c.setFont(font_bold(), fs)
         c.drawRightString(sh[2], h - sh[3] + 0.22 * fs, text)
-    if S["logo"] and mk and logo_path().exists():
+    if show_logo:
         from reportlab.lib.utils import ImageReader
         img = ImageReader(str(logo_path()))
         iw, ih = img.getSize()
-        lh = float(S["logo_height"])
+        lx, ly, lh = float(S["logo_x"]), float(S["logo_y"]), float(S["logo_height"])
         lw = lh * iw / ih
-        if lw > 175 - mk[0]:                                          # keep clear of the "Post by / Paid and printed" text on the right
-            lw, lh = 175 - mk[0], (175 - mk[0]) * ih / iw
-        c.drawImage(img, mk[0], h - (mk[1] + mk[3]) / 2 - lh / 2, lw, lh, mask="auto")
+        if lx + lw > w - 10:                                          # never run off the right edge of the label
+            lw = max(10.0, w - 10 - lx)
+            lh = lw * ih / iw
+        c.drawImage(img, lx, h - ly - lh, lw, lh, mask="auto")        # logo_x / logo_y = its top-left corner, from the label's top-left
     c.save()
     buf.seek(0)
     return PdfReader(buf).pages[0]
@@ -468,10 +492,11 @@ def parse_pdf(src):
 
 # --------------------------------------------------------------------------- stamping
 
-def layout(lines, w, h, x, y, size):
-    """Choose (size, columns) so the text fits the space left under the stamp position."""
-    avail_w = w - x - 10
-    avail_h = max(24.0, h - y - 12)
+def layout(lines, w, h, x, y, size, max_w=None, bottom=None):
+    """Choose (size, columns) so the text fits the space left under the stamp position.
+    max_w: width available (default: to the right edge); bottom: lowest point of the text from the top (default: 12 pt above the edge)."""
+    avail_w = max_w if max_w else w - x - 10
+    avail_h = max(24.0, (bottom if bottom else h - 12) - y)
     for cols in (1, 2):
         per_col = -(-len(lines) // cols)
         col_w = avail_w / cols
@@ -485,13 +510,13 @@ def layout(lines, w, h, x, y, size):
     return 6, 2, False
 
 
-def overlay(w, h, lines, x, y, size):
+def overlay(w, h, lines, x, y, size, max_w=None, bottom=None):
     """-> (pdf page, fitted_ok)."""
-    s, cols, ok = layout(lines, w, h, x, y, size)
+    s, cols, ok = layout(lines, w, h, x, y, size, max_w, bottom)
     buf = io.BytesIO()
     c = canvas.Canvas(buf, pagesize=(w, h))
     per_col = -(-len(lines) // cols)
-    col_w = (w - x - 10) / cols
+    col_w = (max_w if max_w else w - x - 10) / cols
     for n, t in enumerate(lines):
         col, row = divmod(n, per_col)
         c.setFillColorRGB(*((0.85, 0, 0) if CHECK_TEXT in t else tuple(S["colour"])))
@@ -874,7 +899,8 @@ def process(src, a, cfg):
                 label.merge_page(deco)                      # white boxes / replacement text / logo first, the SKU stamp on top
             else:
                 not_decorated += 1
-        ov, ok = overlay(w, h, text, a.x, a.y, a.size)
+        sx, sy, smax, sbottom = stamp_position(o.get("regions") or {}, a.x, a.y, a.size)
+        ov, ok = overlay(w, h, text, sx, sy, a.size, smax, sbottom)
         label.merge_page(ov)
         if keep_slip:
             writer.add_page(reader.pages[o["slip_page"]])    # the packing slip with the note stays right behind its label

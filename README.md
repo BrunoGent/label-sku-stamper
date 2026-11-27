@@ -120,9 +120,11 @@ All the options live in **`settings.json`**: open it in Notepad, change a value,
 | `cover_marketplace_seller` | false | White box over "MARKETPLACE SELLER" on the label (see [Covering wording and the logo](#covering-wording-and-adding-the-logo-optional)) |
 | `cover_shopify` | false | White box over the word "Shopify" at the bottom right |
 | `shopify_replacement` | `beeminedorset.com` | Text written where "Shopify" was (only when `cover_shopify` is true). `""` = leave it blank |
-| `logo` | false | The logo replaces "MARKETPLACE SELLER" (that wording is covered too) |
+| `logo` | false | Print the logo on the label |
 | `logo_style` | `thermal` | `thermal` = black and white for the thermal label printer, `colour` = full colour |
-| `logo_height` | 34 | Logo height in points (the block it replaces is about 33 tall; taller runs into the SKU lines) |
+| `logo_x`, `logo_y` | 100, 347 | The logo's **top-left corner**, in points from the left and the top of the label (288 x 432). 100 / 347 is the empty space in the middle of the bottom box |
+| `logo_height` | 46 | Logo height in points (the width follows). Too big and it runs into the text beside it |
+| `sku_to_top` | false | The SKUs start at the **top left of the bottom box**, where "MARKETPLACE SELLER" is printed (that wording is covered), instead of at `x` / `y`. The text stays clear of the logo and of Royal Mail's small print along the bottom |
 | `picklist_group_titles` | true | Show each group's name (from `sort_groups.json`) as a bold title with a line under it |
 | `picklist_page_per_group` | false | `true` = start every group on a new page |
 | `picklist_priority_flag` | true | Pick list: a red `P<n>` beside a SKU when `n` of its orders are priority postage, and a red **PRIORITY orders** count under Total orders. `false` = off |
@@ -154,7 +156,8 @@ Shopify's Royal Mail label prints **MARKETPLACE SELLER** at the bottom left and 
 |---|---|
 | `cover_marketplace_seller` | White box over "MARKETPLACE SELLER" |
 | `cover_shopify` + `shopify_replacement` | White box over "Shopify", with `beeminedorset.com` (or your own text, or nothing) written in its place. The words "Paid and printed from" stay, so the line reads "Paid and printed from beeminedorset.com" |
-| `logo`, `logo_style`, `logo_height` | The logo replaces "MARKETPLACE SELLER" (covering it too). `thermal` = the black and white version for the thermal printer, `colour` = full colour |
+| `logo`, `logo_style`, `logo_x`, `logo_y`, `logo_height` | The logo, placed by its top-left corner (`logo_x` from the left, `logo_y` from the top, in points) and its height. `thermal` = the black and white version for the thermal printer, `colour` = full colour. The defaults put it in the empty middle of the bottom box. It needs none of the label's wording, so it is drawn on every label |
+| `sku_to_top` | Moves the SKUs to the top left of the bottom box, where "MARKETPLACE SELLER" is (covering it). The text is kept to the left of the logo (it shrinks to fit) and above Royal Mail's small print. A label without that wording uses `x` / `y` as normal |
 
 - **Where.** The program finds the wording by reading the label's own text, only in the bottom 30% of the label, so it follows the label if it shifts a little and can never cover a customer named Seller. A label that has none of the wording is left as printed, and the window says how many.
 - **Order of drawing.** The white boxes, replacement text and logo go on first, then the SKU stamp on top.
