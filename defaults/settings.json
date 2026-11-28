@@ -38,7 +38,8 @@
   // ---- Orders with a note (the slip has a NOTES section, e.g. "2 dark green and 2 wine purple candles")
   "note_mark": true,               // true = add a NOTE line under the SKUs on the label and list the orders in the summary. false = off
   "note_text": "NOTE",             // the word stamped on the label
-  "keep_note_slips": true,         // true = keep that order's packing slip (4x6) right behind its label so the note can be read. false = drop it like the others
+  "keep_no_sku_slips": true,        // true = an order with no SKU (yellow ~~ or red !!) keeps its packing slip (4x6) right behind its label, to read what is in it. false = drop it
+  "keep_note_slips": true,        // true = keep that order's packing slip (4x6) right behind its label so the note can be read. false = drop it like the others
 
   // ---- Wording printed on Shopify's Royal Mail label (all OFF until you switch them on)
   // Each option draws a white box over the wording. Before using these, check that Royal Mail / Shopify are happy

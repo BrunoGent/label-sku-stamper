@@ -116,6 +116,7 @@ All the options live in **`settings.json`**: open it in Notepad, change a value,
 | `gift_text` | `GIFT MESSAGE` | The words stamped on a gift-message label |
 | `note_mark` | true | The order's slip has a note: add a `NOTE` line under the SKUs on the label and list the order in the summary. `false` = off |
 | `note_text` | `NOTE` | The word stamped on such a label |
+| `keep_no_sku_slips` | true | An order with no SKU (yellow `~~` or red `!!`) keeps its packing slip right behind its label, so you can see what is in it. `false` = drop it |
 | `keep_note_slips` | true | Keep the 4x6 packing slip of an order with a note right behind its label, so the note can be read. `false` = drop it like the other slips |
 | `cover_marketplace_seller` | false | White box over "MARKETPLACE SELLER" on the label (see [Covering wording and the logo](#covering-wording-and-adding-the-logo-optional)) |
 | `cover_shopify` | false | White box over the word "Shopify" at the bottom right |

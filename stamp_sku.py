@@ -53,7 +53,7 @@ DEFAULTS = {
     "picklist_priority_flag": True, "priority_words": ["1st class", "first class", "special delivery"],
     "repeat_star": True, "repeat_double_star_from": 15,
     "gift_mark": True, "gift_text": "GIFT MESSAGE",
-    "note_mark": True, "note_text": "NOTE", "keep_note_slips": True,
+    "note_mark": True, "note_text": "NOTE", "keep_note_slips": True, "keep_no_sku_slips": True,
     "cover_marketplace_seller": False, "cover_shopify": False, "shopify_replacement": "beeminedorset.com",
     "logo": False, "logo_style": "thermal", "logo_height": 46, "logo_x": 100, "logo_y": 347, "sku_to_top": False,
     "layout_alarm_percent": 25, "open_after": True, "move_originals": True, "strip_typed_text": False,
@@ -878,7 +878,8 @@ def process(src, a, cfg):
             text[0] += " " + star                          # same habit as writing * by hand
         gift = bool(o.get("gift")) and bool(S["gift_mark"])
         note = bool(o.get("note")) and bool(S["note_mark"])
-        keep_slip = bool(o.get("note")) and bool(S["keep_note_slips"]) and o.get("slip_page") is not None
+        keep_slip = ((bool(o.get("note")) and bool(S["keep_note_slips"])) or ((bad or guessed) and bool(S["keep_no_sku_slips"]))) \
+            and o.get("slip_page") is not None
         print(f"  {mark} Order {o['order']:>11}: {' | '.join(text) or '-'}" + (f"  {YELLOW}{BOLD}[{S['gift_text']}]{OFF}" if gift else "")
               + (f"  {YELLOW}{BOLD}[{S['note_text']}]{OFF}" if note else "")
               + (f"  {RED}{BOLD}[PRIORITY: {o['priority']}]{OFF}" if o.get("priority") else ""))
@@ -986,7 +987,7 @@ def process(src, a, cfg):
             writer.add_page(pg)                  # pick list = last page(s) of the same PDF
     with open(out, "wb") as f:
         writer.write(f)
-    print(f"  -> {out}  ({total} labels" + (f" + {kept_slips} packing slip{'s' if kept_slips != 1 else ''} with a note" if kept_slips else "")
+    print(f"  -> {out}  ({total} labels" + (f" + {kept_slips} packing slip{'s' if kept_slips != 1 else ''} kept (note / no SKU)" if kept_slips else "")
           + (" + pick list as the last page)" if a.picklist else ")"))
     if a.preview:
         png = preview_png(out, busiest[1], out.with_suffix(".png"))

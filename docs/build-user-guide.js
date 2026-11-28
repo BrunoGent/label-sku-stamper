@@ -119,6 +119,7 @@ const doc = new Document({
       bullet("A small * after the SKU on a label means a repeat customer (two ** means a very frequent one). It comes from the packing slip, so it is stamped automatically."),
       bullet("Bruno can switch on options that cover the words “MARKETPLACE SELLER” and “Shopify” on the label, write beeminedorset.com instead of “Shopify”, and print the Bee Mine logo in the empty space, with the SKUs at the top left of the bottom box. If your labels look like that, it is on purpose. The barcodes and the address are never touched."),
       bullet("A line NOTE under the SKUs on a label means the customer left a note. That order’s packing slip is kept: it comes out as the page right behind its label, with the note on it. Read the note and pack as it says (for example the colours of a mixed set). The window lists those orders in yellow."),
+      bullet("An order with no SKU (yellow ~~ or red !!) also keeps its packing slip: it comes out as the page right behind its label, so you can see what is in the parcel. Keep the slip with the order."),
       bullet("A last line GIFT MESSAGE on a label means the order has a gift message. Print it from Etsy and put it in the parcel. The window also lists those orders in yellow. A gift order with no message gets nothing."),
       bullet("Labels and downloads are kept in the “Labels” and “done” folders. Keep them; there is no need to delete anything."),
       bullet("The PDFs contain customers’ names and addresses. Do not email or share them, or put them online."),

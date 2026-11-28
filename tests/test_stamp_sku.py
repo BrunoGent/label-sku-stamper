@@ -277,8 +277,8 @@ class GiftMessages(unittest.TestCase):
         from pypdf import PdfReader
         with tempfile.TemporaryDirectory() as d:
             src, out = Path(d) / "shipping_t.pdf", Path(d) / "out.pdf"
-            make_pdf(src, [("3001", [(1, ["12 TL"])], ["GIFT MESSAGE (print from Etsy):", "Hi"]),
-                           ("3002", [(1, ["60mm"])], [])])
+            make_pdf(src, [("3001", [(1, ["Tealight","12 TL"])], ["GIFT MESSAGE (print from Etsy):", "Hi"]),
+                           ("3002", [(1, ["Pillar","60mm"])], [])])
             run = subprocess.run([sys.executable, str(Path(s.__file__)), str(src), "-o", str(out), "--no-open", "--no-picklist", "--no-sort"],
                                  capture_output=True, text=True, cwd=d)
             self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
@@ -319,8 +319,8 @@ class NoteSlips(unittest.TestCase):
         from pypdf import PdfReader
         with tempfile.TemporaryDirectory() as d:
             src, out = Path(d) / "shipping_t.pdf", Path(d) / "out.pdf"
-            make_pdf(src, [("5001", [(1, ["12 TL"])], ["2 dark green and 2 wine purple candles"]),
-                           ("5002", [(1, ["60mm"])], [])])
+            make_pdf(src, [("5001", [(1, ["Tealight","12 TL"])], ["2 dark green and 2 wine purple candles"]),
+                           ("5002", [(1, ["Pillar","60mm"])], [])])
             cmd = [sys.executable, str(Path(s.__file__)), str(src), "-o", str(out), "--no-open", "--no-picklist", "--no-sort"]
             run = subprocess.run(cmd, capture_output=True, text=True, cwd=d)
             self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
@@ -330,7 +330,18 @@ class NoteSlips(unittest.TestCase):
             self.assertIn("2 dark green", pages[1])                                  # the kept slip, right behind its label
             self.assertNotIn("NOTE", pages[2])
             self.assertIn("1 order with a note", run.stdout)
-            self.assertIn("1 packing slip with a note", run.stdout)
+            self.assertIn("1 packing slip kept", run.stdout)
+
+    def test_order_without_sku_keeps_its_slip(self):
+        import subprocess
+        from pypdf import PdfReader
+        with tempfile.TemporaryDirectory() as d:
+            src, out = Path(d) / "shipping_t.pdf", Path(d) / "out.pdf"
+            make_pdf(src, [("6001", []), ("6002", [(1, ["Pillar","60mm"])])])                 # 6001: nothing readable on the slip
+            cmd = [sys.executable, str(Path(s.__file__)), str(src), "-o", str(out), "--no-open", "--no-picklist", "--no-sort"]
+            run = subprocess.run(cmd, capture_output=True, text=True, cwd=d)
+            self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+            self.assertEqual(len(PdfReader(str(out)).pages), 3)                      # label 6001, its slip, label 6002
 
 
 class LabelCovers(unittest.TestCase):
@@ -484,9 +495,9 @@ class RepeatCustomers(unittest.TestCase):
         from pypdf import PdfReader
         with tempfile.TemporaryDirectory() as d:
             src, out = Path(d) / "shipping_t.pdf", Path(d) / "out.pdf"
-            make_pdf(src, [("5001", [(1, ["12 TL"])], [], "REPEAT CUSTOMER (Order #4)"),
-                           ("5002", [(1, ["60mm"])], []),
-                           ("5003", [(2, ["4 2cm"])], [], "REPEAT CUSTOMER (Order #15)")])
+            make_pdf(src, [("5001", [(1, ["Tealight","12 TL"])], [], "REPEAT CUSTOMER (Order #4)"),
+                           ("5002", [(1, ["Pillar","60mm"])], []),
+                           ("5003", [(2, ["Dipped","4 2cm"])], [], "REPEAT CUSTOMER (Order #15)")])
             run = subprocess.run([sys.executable, str(Path(s.__file__)), str(src), "-o", str(out), "--no-open", "--no-picklist", "--no-sort"],
                                  capture_output=True, text=True, cwd=d)
             self.assertEqual(run.returncode, 0, run.stdout + run.stderr)

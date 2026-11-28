@@ -34,15 +34,16 @@
   // ---- Orders with a note (the slip has a NOTES section, e.g. "2 dark green and 2 wine purple candles")
   "note_mark": true,               // true = add a NOTE line under the SKUs on the label and list the orders in the summary. false = off
   "note_text": "{NOTE}",             // the word stamped on the label
-  "keep_note_slips": true,         // true = keep that order's packing slip (4x6) right behind its label so the note can be read. false = drop it like the others
+  "keep_no_sku_slips": true,        // true = an order with no SKU (yellow ~~ or red !!) keeps its packing slip (4x6) right behind its label, to read what is in it. false = drop it
+  "keep_note_slips": true,        // true = keep that order's packing slip (4x6) right behind its label so the note can be read. false = drop it like the others
 
   // ---- Wording printed on Shopify's Royal Mail label (all OFF until you switch them on)
   // Each option draws a white box over the wording. Before using these, check that Royal Mail / Shopify are happy
   // for the label to be changed. Barcodes, the routing code, the service banner and the address are never touched.
   "cover_marketplace_seller": true,   // true = white box over "MARKETPLACE SELLER"
-  "cover_shopify": true,              // true = white box over the word "Shopify" (the line above, "Paid and printed from", stays)
+  "cover_shopify": false,              // true = white box over the word "Shopify" (the line above, "Paid and printed from", stays)
   "shopify_replacement": "beeminedorset.com",   // text written where "Shopify" was; "" = just leave it blank. Only used when cover_shopify is true
-  "logo": true,                       // true = print the logo on the label
+  "logo": false,                       // true = print the logo on the label
   "logo_x": 100,                       // the logo's top-left corner: points from the LEFT of the label (the label is 288 wide)
   "logo_y": 347,                       // ... and from the TOP (the label is 432 tall). 100 / 347 = the empty space in the middle of the bottom box
   "logo_height": 46,                   // logo height in points (the width follows). Too big and it runs into the text beside it
